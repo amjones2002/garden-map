@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import EditToggle from "@/components/EditToggle";
+import { EditModeProvider } from "@/lib/edit-mode";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,8 +38,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <main style={{ paddingBottom: 64 }}>{children}</main>
-        <Nav />
+        <EditModeProvider>
+          <EditToggle />
+          <main style={{ paddingBottom: 64 }}>{children}</main>
+          <Nav />
+        </EditModeProvider>
       </body>
     </html>
   );
