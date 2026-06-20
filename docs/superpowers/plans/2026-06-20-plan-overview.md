@@ -6,8 +6,8 @@ own. Write each plan's detail only when the prior plan is working (so it reflect
 
 | # | Plan | Status | File |
 |---|------|--------|------|
-| 1 | Foundation & Data Layer — app shell, Supabase schema, seeded catalog/zones/vendors | **Written** | `2026-06-20-plan-1-foundation-data-layer.md` |
-| 2 | Edit Gate & Write Infra — password unlock, signed cookie, gated server write-route pattern, RLS verification | Not yet written | — |
+| 1 | Foundation & Data Layer — app shell, Supabase schema, seeded catalog/zones/vendors | **Done (merged to main)** | `2026-06-20-plan-1-foundation-data-layer.md` |
+| 2 | Edit Gate & Write Infra — password unlock, signed cookie, gated server write-route pattern, RLS verification | **Written** | `2026-06-20-plan-2-edit-gate.md` |
 | 3 | Map View & Zone Panel — accurate survey-traced base map, zones from shape data, tap → detail panel (plants, photos, purchases), zone-photos storage bucket | Not yet written | — |
 | 4 | Purchase Tracker — table CRUD, sort/filter, vendor inline-add, auto-add-to-plant-list, CSV import/export | Not yet written | — |
 | 5 | Zone Shape Editor — polygon draw/edit over survey image, save normalized coords | Not yet written | — |
