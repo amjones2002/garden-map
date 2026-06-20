@@ -1,10 +1,14 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import fs from "fs";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import { parseNpsot } from "./lib/parse-npsot.mjs";
 import { parseWildflower } from "./lib/parse-wildflower.mjs";
 import { mergeCatalog } from "./lib/merge-catalog.mjs";
+
+// Next.js stores local env in .env.local; load that (then plain .env as fallback).
+config({ path: ".env.local" });
+config();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
