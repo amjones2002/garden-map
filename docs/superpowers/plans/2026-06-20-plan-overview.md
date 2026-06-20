@@ -9,7 +9,7 @@ own. Write each plan's detail only when the prior plan is working (so it reflect
 | 1 | Foundation & Data Layer — app shell, Supabase schema, seeded catalog/zones/vendors | **Done (merged to main)** | `2026-06-20-plan-1-foundation-data-layer.md` |
 | 2 | Edit Gate & Write Infra — password unlock, signed cookie, gated server write-route pattern, RLS verification | **Written** | `2026-06-20-plan-2-edit-gate.md` |
 | 3 | Map View & Zone Panel — stylized base map, zones from shape data, tap → detail panel (plants + purchases), gated plant CRUD | **Done (merged to main)** — photo upload deferred (see below) | `2026-06-20-plan-3-map-zone-panel.md` |
-| 4 | Purchase Tracker — table CRUD, sort/filter, vendor inline-add, auto-add-to-plant-list, CSV import/export | Not yet written | — |
+| 4 | Purchase Tracker — table CRUD, sort/filter, vendor inline-add, auto-add-to-plant-list, CSV import/export | **Done (merged to main)** | `2026-06-20-plan-4-tracker.md` |
 | 5 | Zone Shape Editor — polygon draw/edit over survey image, save normalized coords | Not yet written | — |
 | 6 | Styling & Deploy — BHL botanical aesthetic, hand-lettered labels, Vercel deploy, mobile QA | Not yet written | — |
 
