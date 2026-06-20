@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seed:catalog": "node scripts/seed-catalog.mjs",
+    "seed:zones": "node scripts/seed-zones.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
