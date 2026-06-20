@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useEditMode } from "@/lib/edit-mode";
 
 const wrap: React.CSSProperties = {
@@ -36,6 +37,9 @@ export default function EditToggle() {
     return (
       <div style={wrap}>
         <span style={{ fontSize: 12, color: "#7aa329" }}>● editing</span>
+        <Link href="/editor" style={{ ...btn, textDecoration: "none" }}>
+          Editor
+        </Link>
         <button style={btn} onClick={() => lock()}>
           Lock
         </button>
