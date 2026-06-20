@@ -16,7 +16,10 @@ A mobile-first web app with two linked parts:
 The app is **public read-only**; editing is gated behind a shared password (v1) with Google SSO planned for v2. All routine data changes happen through the UI — no code or config edits for day-to-day use.
 
 ### Primary use context
-Standing in the yard, on a phone. Mobile-first is a hard requirement, not a nice-to-have.
+1. **In the yard, on a phone.** Mobile-first is a hard requirement, not a nice-to-have — the gardener uses it standing in the beds to check and log plants.
+2. **Sharing with remote friends and relatives.** A taste of the Texas Prairie and Desert wherever they may be. The public read-only view must be genuinely *delightful* to browse for distant viewers — beautiful, not merely functional.
+
+These two contexts pull the design toward the same place: a fast, touch-friendly map that is also a pleasure to look at.
 
 ---
 
@@ -25,7 +28,7 @@ Standing in the yard, on a phone. Mobile-first is a hard requirement, not a nice
 ### In v1
 - Map view with tap-to-open zone detail panel
 - Per-zone editable "current plants" list
-- Zone photos (Supabase Storage)
+- Zone photos with capture timestamps (Supabase Storage), shown as a chronological per-zone gallery — foundation for future seasonal timelines (§11)
 - Global purchase tracker: CRUD, sort/filter, CSV **import** and **export**
 - Lenient bulk importer for migrating existing plant/purchase records
 - Plant name catalog seeded from NPSOT + WildflowersOrg, driving autocomplete
@@ -130,7 +133,9 @@ zone_photos
   zone_id       uuid fk -> zones
   storage_path  text                   -- path in zone-photos bucket
   caption       text null
-  sort_order    int
+  taken_at      timestamptz null       -- when the photo was taken (EXIF or manual); drives seasonal ordering
+  uploaded_at   timestamptz default now()
+  sort_order    int                    -- manual override; default order is chronological by taken_at
 
 plant_catalog                          -- seeded from NPSOT + WildflowersOrg
   id                  uuid pk
@@ -192,7 +197,7 @@ When the user adds a plant absent from the catalog, a single button fetches **on
 - Tap/hover highlight; zones large enough to tap reliably on a phone.
 - Tapping a zone opens a **slide-up panel / modal** showing:
   - Zone name + short description
-  - Zone photos
+  - **Zone photo gallery** — timestamped photos for that zone, shown **chronologically by `taken_at`**. On upload, capture the date taken (from EXIF when present, else manual/upload time). This is the foundation for the "through the seasons" timeline (see §11). Upload/delete gated behind the edit password.
   - **Current plant list** (editable when unlocked)
   - **Recent purchase history** for that zone
   - **"Add purchase"** button, pre-filled with that zone
@@ -259,11 +264,14 @@ Initial seed from the project brief:
 - Replaces hand-tracing coordinates outside the app.
 
 ### 7.4 Visual style
-- **Illustrated, hand-drawn garden-map feel** — not a literal photo or generic floor plan / dashboard.
-- **Wood-element feng shui palette:** lime/chartreuse greens, burgundy-purple accents, earthy neutrals for paths/hardscape.
-- **Hand-lettered zone labels** (web font such as *Caveat* / *Patrick Hand*).
-- Subtle SVG roughen filter so edges look sketched, not CAD-straight.
-- Mobile-first layout throughout.
+- **Vintage botanical-illustration aesthetic, in the spirit of the Biodiversity Heritage Library** — antique natural-history plates: fine copperplate-engraving linework, aged-paper ground, muted plate textures. The map should feel like a hand-drawn naturalist's survey, not a literal photo or a generic floor plan / dashboard.
+- **Plant & zone accents** rendered as botanical-plate-style illustrations (engraving line art), layered over the map.
+- **Wood-element feng shui palette** as the color accents: lime/chartreuse greens, burgundy-purple accents, earthy neutrals for paths/hardscape — applied over the aged-paper base.
+- **Hand-lettered zone labels** (web font such as *Caveat* / *Patrick Hand*), evoking a naturalist's annotations.
+- Subtle SVG roughen filter so edges look sketched/engraved, not CAD-straight.
+- Mobile-first layout throughout, and beautiful enough to enjoy as a remote viewer (see §1 use context 2).
+
+**Sourcing note:** BHL imagery is largely public domain, but provenance varies. Any illustration assets pulled from BHL or similar archives must be confirmed public-domain / appropriately licensed and attributed before use; otherwise we use original engraving-style line art in the same spirit.
 
 ---
 
@@ -294,7 +302,7 @@ Initial seed from the project brief:
 - **Vendor seed list** — user's regular vendors (or leave empty to fill in-app). "Data Migration" is always seeded.
 - **Existing data file** — user's historical purchases/plants for the bulk importer (prices are guesstimates → `price_estimated`; unknown sources → "Data Migration").
 - **`gh` CLI** is not installed on the dev machine; needed for GitHub PR workflows / smoother Vercel deploy. Optional but recommended.
-- **Supabase project** — user will need to create a free Supabase project and provide the project URL + keys (the one external-dashboard setup step for v1).
+- **Supabase project** — ✅ created (`project_ref` rdckuaoxcxfnpjpeussk). Access via the **Supabase MCP** (configured in `.mcp.json`) for schema/seed/storage; the `anon` key goes in `.env.local`, the `service_role` key stays server-side only. SSO is deferred to v2.
 
 ---
 
@@ -305,3 +313,15 @@ Initial seed from the project brief:
 - `NPSOT/plant-list.csv` — native plant catalog source (primary)
 - `NPSOT/plant-list.xlsx` — same data, XLSX (two-row category header; CSV preferred)
 - `WildflowersOrg/*.htm` — 11 ecoregion lists (ecoregion tagging + sun/water cross-reference)
+
+---
+
+## 11. Future Directions (post-v1)
+
+Documented to guide v1 data choices, not built in v1:
+
+- **"Through the seasons" timelines** — using `zone_photos.taken_at`, render a scrubbable chronological gallery per zone (and eventually a whole-yard view) showing the same bed across seasons and years. v1 captures the timestamps so this is purely a presentation layer later.
+- **Google SSO** with email allow-list (Supabase Auth) — replaces the shared-password gate; data model already accommodates it.
+- **Plant detail pages** — rich per-plant view drawing on the `plant_catalog` horticultural fields (bloom season, wildlife benefit, sun/water) for remote viewers learning about Texas natives.
+- **Spend & inventory analytics** — per-vendor spend, plant survival rates (via `status`), confirm-estimated-prices workflow.
+- **Photo enrichment** — EXIF GPS to auto-suggest a zone; bloom/phenology tagging.
