@@ -1,0 +1,9 @@
+{
+  "devDependencies": {
+    "pdf-parse": "^2.4.5"
+  },
+  "dependencies": {
+    "pdf-to-img": "^6.2.0",
+    "sharp": "^0.35.2"
+  }
+}
