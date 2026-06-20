@@ -8,7 +8,7 @@ own. Write each plan's detail only when the prior plan is working (so it reflect
 |---|------|--------|------|
 | 1 | Foundation & Data Layer — app shell, Supabase schema, seeded catalog/zones/vendors | **Done (merged to main)** | `2026-06-20-plan-1-foundation-data-layer.md` |
 | 2 | Edit Gate & Write Infra — password unlock, signed cookie, gated server write-route pattern, RLS verification | **Written** | `2026-06-20-plan-2-edit-gate.md` |
-| 3 | Map View & Zone Panel — accurate survey-traced base map, zones from shape data, tap → detail panel (plants, photos, purchases), zone-photos storage bucket | Not yet written | — |
+| 3 | Map View & Zone Panel — stylized base map, zones from shape data, tap → detail panel (plants + purchases), gated plant CRUD | **Done (merged to main)** — photo upload deferred (see below) | `2026-06-20-plan-3-map-zone-panel.md` |
 | 4 | Purchase Tracker — table CRUD, sort/filter, vendor inline-add, auto-add-to-plant-list, CSV import/export | Not yet written | — |
 | 5 | Zone Shape Editor — polygon draw/edit over survey image, save normalized coords | Not yet written | — |
 | 6 | Styling & Deploy — BHL botanical aesthetic, hand-lettered labels, Vercel deploy, mobile QA | Not yet written | — |
@@ -17,6 +17,9 @@ own. Write each plan's detail only when the prior plan is working (so it reflect
 The edit gate (Plan 2) is pulled **earlier** than spec §8 (which had it as Phase 6). Reason:
 all write features depend on it, so building the auth boundary first means the tracker and
 editor routes are gated from the start rather than retrofitted.
+
+## Deferred follow-ups (v1, not yet built)
+- **Zone photos** (Plan 3 Task 6): `zone-photos` storage bucket, gated upload, chronological gallery with `taken_at`. Schema (`zone_photos`) already exists; UI + bucket deferred during the overnight run to keep momentum.
 
 ## Deferred to v2 (not in any plan above)
 Google SSO; through-the-seasons photo timelines; plant detail pages; spend/inventory
