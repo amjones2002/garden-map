@@ -14,3 +14,14 @@ export function centroid(points: Point[]): Point {
 export function toSvgPoints(points: Point[], size: number): string {
   return points.map((p) => `${p.x * size},${p.y * size}`).join(" ");
 }
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/** Convert SVG-space points (0..size) to normalized, rounded (4dp), clamped [0,1] points. */
+export function normalizeShape(points: Point[], size: number): Point[] {
+  return points.map((p) => ({
+    x: round4(clamp01(p.x / size)),
+    y: round4(clamp01(p.y / size)),
+  }));
+}
