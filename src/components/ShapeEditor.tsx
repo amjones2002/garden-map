@@ -250,7 +250,7 @@ export default function ShapeEditor() {
         {/* Editing polygon (bold) + its label */}
         {points.length >= 2 && (
           <polygon
-            points={toSvgPoints(points, SIZE)}
+            points={points.map((p) => `${p.x},${p.y}`).join(" ")}
             fill={selectedZone?.fill_color ?? "#9bbf4a"}
             fillOpacity={0.5}
             stroke="#3f4a2e"
