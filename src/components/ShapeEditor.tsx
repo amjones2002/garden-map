@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
-import { normalizeShape, toSvgPoints, type Point } from "@/lib/geometry";
+import { centroid, normalizeShape, toSvgPoints, type Point } from "@/lib/geometry";
 import type { Zone } from "@/lib/types";
 import BaseMap from "./BaseMap";
 
@@ -15,6 +15,7 @@ export default function ShapeEditor() {
   const [points, setPoints] = useState<Point[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+  const [showOthers, setShowOthers] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const movedRef = useRef(false);
 
@@ -119,6 +120,9 @@ export default function ShapeEditor() {
         <button style={ctrl} onClick={removeSelected} disabled={selectedPoint === null}>Delete point</button>
         <button style={ctrl} onClick={() => selectedId && selectZone(selectedId)} disabled={!selectedId}>Reset</button>
         <button style={{ ...ctrl, background: "#9bbf4a", fontWeight: 600 }} onClick={save} disabled={!selectedId}>Save</button>
+        <label style={{ ...ctrl, display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={showOthers} onChange={(e) => setShowOthers(e.target.checked)} /> show other zones
+        </label>
       </div>
       {msg && <p style={{ color: "#7a6a44" }}>{msg}</p>}
 
@@ -132,16 +136,65 @@ export default function ShapeEditor() {
       >
         <BaseMap />
 
-        {/* Other zones for context */}
-        {zones
-          .filter((z) => z.id !== selectedId && Array.isArray(z.shape) && z.shape.length >= 3)
-          .map((z) => (
-            <polygon key={z.id} points={toSvgPoints(z.shape as Point[], SIZE)} fill={z.fill_color ?? "#999"} fillOpacity={0.15} stroke="#9c8567" strokeWidth={2} strokeDasharray="6 6" style={{ pointerEvents: "none" }} />
-          ))}
+        {/* Dim the base map while editing so zones stand out */}
+        {selectedId && <rect x="0" y="0" width="1000" height="1000" fill="#f3ead4" opacity={0.3} style={{ pointerEvents: "none" }} />}
 
-        {/* Editing polygon */}
+        {/* Other zones (context): solid, subdued, and labeled so you can tell them apart */}
+        {showOthers &&
+          zones
+            .filter((z) => z.id !== selectedId && Array.isArray(z.shape) && z.shape.length >= 3)
+            .map((z) => {
+              const c = centroid(z.shape as Point[]);
+              return (
+                <g key={z.id} style={{ pointerEvents: "none" }}>
+                  <polygon
+                    points={toSvgPoints(z.shape as Point[], SIZE)}
+                    fill={z.fill_color ?? "#999"}
+                    fillOpacity={0.22}
+                    stroke={z.fill_color ?? "#9c8567"}
+                    strokeOpacity={0.55}
+                    strokeWidth={2}
+                  />
+                  <text
+                    x={c.x * SIZE}
+                    y={c.y * SIZE}
+                    fontSize={19}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#6b5f44"
+                    fillOpacity={0.75}
+                    fontFamily="var(--font-hand), cursive"
+                  >
+                    {z.label ?? z.name}
+                  </text>
+                </g>
+              );
+            })}
+
+        {/* Editing polygon (bold) + its label */}
         {points.length >= 2 && (
-          <polygon points={toSvgPoints(points, SIZE)} fill={selectedZone?.fill_color ?? "#9bbf4a"} fillOpacity={0.4} stroke="#3f4a2e" strokeWidth={4} style={{ pointerEvents: "none" }} />
+          <polygon
+            points={toSvgPoints(points, SIZE)}
+            fill={selectedZone?.fill_color ?? "#9bbf4a"}
+            fillOpacity={0.5}
+            stroke="#3f4a2e"
+            strokeWidth={5}
+            style={{ pointerEvents: "none" }}
+          />
+        )}
+        {points.length >= 3 && selectedZone && (
+          <text
+            x={centroid(points).x}
+            y={centroid(points).y}
+            fontSize={26}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#2f3722"
+            fontFamily="var(--font-hand), cursive"
+            style={{ pointerEvents: "none" }}
+          >
+            {selectedZone.label ?? selectedZone.name}
+          </text>
         )}
         {points.map((p, i) => (
           <circle
@@ -149,7 +202,7 @@ export default function ShapeEditor() {
             cx={p.x}
             cy={p.y}
             r={selectedPoint === i ? 16 : 12}
-            fill={selectedPoint === i ? "#8e3b5e" : "#fff"}
+            fill={selectedPoint === i ? "#8e3b5e" : i === 0 ? "#9bbf4a" : "#fff"}
             stroke="#3f4a2e"
             strokeWidth={3}
             style={{ cursor: "grab" }}
