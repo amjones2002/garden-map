@@ -17,9 +17,9 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "Eastview Yard Map",
+  title: "Berkner Park Garden Map",
   description:
-    "Interactive yard map & plant tracker for 1105 Eastview Cir — a taste of the Texas prairie and desert.",
+    "An illustrated, mobile-first map of a Texas prairie & desert native-plant garden — explore the zones, plants, and growing notes.",
 };
 
 export const viewport: Viewport = {

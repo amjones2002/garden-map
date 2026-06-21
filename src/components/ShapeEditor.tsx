@@ -15,7 +15,6 @@ export default function ShapeEditor() {
   const [points, setPoints] = useState<Point[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
-  const [showSurvey, setShowSurvey] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const movedRef = useRef(false);
 
@@ -120,9 +119,6 @@ export default function ShapeEditor() {
         <button style={ctrl} onClick={removeSelected} disabled={selectedPoint === null}>Delete point</button>
         <button style={ctrl} onClick={() => selectedId && selectZone(selectedId)} disabled={!selectedId}>Reset</button>
         <button style={{ ...ctrl, background: "#9bbf4a", fontWeight: 600 }} onClick={save} disabled={!selectedId}>Save</button>
-        <label style={{ ...ctrl, display: "flex", gap: 6, alignItems: "center" }}>
-          <input type="checkbox" checked={showSurvey} onChange={(e) => setShowSurvey(e.target.checked)} /> survey overlay
-        </label>
       </div>
       {msg && <p style={{ color: "#7a6a44" }}>{msg}</p>}
 
@@ -134,9 +130,6 @@ export default function ShapeEditor() {
         onPointerMove={onMove}
         onPointerUp={onUp}
       >
-        {showSurvey && (
-          <image href="/survey-page-1.png" x={0} y={0} width={1000} height={1000} opacity={0.3} preserveAspectRatio="xMidYMid meet" />
-        )}
         <BaseMap />
 
         {/* Other zones for context */}

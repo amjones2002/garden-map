@@ -37,3 +37,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Private property survey — kept locally for the developer, never published
+survey-page-1.png
+public/survey-page-1.png
+*.pdf
+*.PDF
