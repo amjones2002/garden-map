@@ -1,8 +1,8 @@
 /**
- * Stylized hardscape for 1105 Eastview Cir, traced loosely from the plat survey:
- * corner lot with a curved Eastview Cir frontage (NW), a chamfered SW corner,
- * Baltimore Drive (S), and the alley (E). Drawn in a 0..1000 viewBox to match
- * the normalized (×1000) zone coordinates. Refined later via the shape editor.
+ * Stylized hardscape for the garden (Berkner Park reference), traced loosely
+ * from the plat survey: a corner lot with a curved frontage (NW), a chamfered
+ * SW corner, a street (S), and an alley (E). Drawn in a 0..1000 viewBox to
+ * match the normalized (×1000) zone coordinates.
  */
 export default function BaseMap() {
   return (
