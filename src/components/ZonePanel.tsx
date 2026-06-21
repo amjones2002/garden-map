@@ -35,7 +35,8 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
   const [photos, setPhotos] = useState<ZonePhoto[]>([]);
   const [newPlant, setNewPlant] = useState("");
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ total: number; done: number } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const sb = getBrowserSupabase();
@@ -74,16 +75,51 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
     load();
   }
 
-  async function uploadPhoto(file: File) {
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("zone_id", zone.id);
-    // Use the file's last-modified date as the capture date (EXIF can refine later).
-    if (file.lastModified) fd.append("taken_at", new Date(file.lastModified).toISOString());
-    await fetch("/api/zone-photos", { method: "POST", body: fd });
-    setUploading(false);
-    load();
+  async function uploadPhotos(files: File[]) {
+    setUploadError(null);
+    setUploadProgress({ total: files.length, done: 0 });
+    let successCount = 0;
+
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          const urlRes = await fetch(
+            `/api/zone-photos/upload-url?zone_id=${encodeURIComponent(zone.id)}&filename=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || "image/jpeg")}`,
+          );
+          if (!urlRes.ok) throw new Error(await urlRes.text());
+          const { signedUrl, path } = (await urlRes.json()) as { signedUrl: string; path: string };
+
+          const putRes = await fetch(signedUrl, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": file.type || "image/jpeg" },
+          });
+          if (!putRes.ok) throw new Error(`Storage upload failed: ${putRes.status}`);
+
+          const confirmRes = await fetch("/api/zone-photos/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              zone_id: zone.id,
+              storage_path: path,
+              taken_at: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+            }),
+          });
+          if (!confirmRes.ok) throw new Error(await confirmRes.text());
+
+          const newPhoto = (await confirmRes.json()) as ZonePhoto;
+          setPhotos((prev) => sortChronological([...prev, newPhoto]));
+          successCount++;
+        } catch (err) {
+          console.error("Photo upload failed:", err);
+        } finally {
+          setUploadProgress((prev) => (prev ? { ...prev, done: prev.done + 1 } : null));
+        }
+      }),
+    );
+
+    setUploadProgress(null);
+    if (successCount === 0) setUploadError("Upload failed — please try again.");
   }
 
   async function removePhoto(id: string) {
@@ -137,19 +173,39 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
           </div>
         )}
         {unlocked && (
-          <label style={{ display: "inline-block", marginTop: 6, padding: "8px 12px", borderRadius: 8, border: "1px solid #cbb994", background: "#e3dac3", cursor: "pointer", fontSize: 13 }}>
-            {uploading ? "Uploading…" : "+ Add photo"}
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadPhoto(f);
-                e.target.value = "";
+          <div style={{ marginTop: 6 }}>
+            <label
+              style={{
+                display: "inline-block",
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #cbb994",
+                background: "#e3dac3",
+                cursor: uploadProgress ? "default" : "pointer",
+                fontSize: 13,
+                opacity: uploadProgress ? 0.7 : 1,
               }}
-            />
-          </label>
+            >
+              {uploadProgress
+                ? `Uploading ${uploadProgress.done} of ${uploadProgress.total}…`
+                : "+ Add photos"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={!!uploadProgress}
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length) uploadPhotos(files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {uploadError && (
+              <p style={{ color: "#8e3b5e", fontSize: 12, margin: "4px 0 0" }}>{uploadError}</p>
+            )}
+          </div>
         )}
 
         <h3 style={{ color: "#7a6a44", marginBottom: 4, marginTop: 16 }}>Currently planted</h3>
