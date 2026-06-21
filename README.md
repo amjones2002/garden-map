@@ -1,6 +1,6 @@
 # garden-map
 
-Interactive yard map & plant purchase tracker for 1105 Eastview Cir, Richardson, TX
+Interactive yard map & plant purchase tracker for Berkner Park, Richardson, TX
 (Lot 27, Block P — a corner lot, 0.2962 acres). A public, mobile-first map of the
 property's planting zones plus a tracker for plant purchases — a taste of the Texas
 prairie and desert, shareable with anyone.
