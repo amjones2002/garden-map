@@ -20,6 +20,18 @@ export type Vendor = {
   sort_order: number;
 };
 
+export type MapLabel = {
+  id: string;
+  text: string;
+  x: number; // normalized 0..1
+  y: number; // normalized 0..1
+  font_size: number;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+};
+
 export type Plant = {
   id: string;
   zone_id: string;

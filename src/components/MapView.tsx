@@ -1,19 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
-import type { Zone } from "@/lib/types";
+import type { Zone, MapLabel } from "@/lib/types";
 import BaseMap from "./BaseMap";
 import ZoneShapes from "./ZoneShapes";
 import ZonePanel from "./ZonePanel";
+import MapLabels from "./MapLabels";
 
 export default function MapView() {
   const [zones, setZones] = useState<Zone[]>([]);
+  const [labels, setLabels] = useState<MapLabel[]>([]);
   const [selected, setSelected] = useState<Zone | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getBrowserSupabase()
-      .from("zones")
+    const sb = getBrowserSupabase();
+    sb.from("zones")
       .select("*")
       .is("archived_at", null)
       .order("sort_order")
@@ -21,6 +23,10 @@ export default function MapView() {
         if (error) setError(error.message);
         else setZones((data ?? []) as Zone[]);
       });
+    sb.from("map_labels")
+      .select("*")
+      .is("archived_at", null)
+      .then(({ data }) => setLabels((data ?? []) as MapLabel[]));
   }, []);
 
   return (
@@ -34,6 +40,7 @@ export default function MapView() {
       >
         <BaseMap />
         <ZoneShapes zones={zones} selectedId={selected?.id ?? null} onSelect={setSelected} />
+        <MapLabels labels={labels} />
       </svg>
       {selected && <ZonePanel zone={selected} onClose={() => setSelected(null)} />}
     </div>

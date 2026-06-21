@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEditMode } from "@/lib/edit-mode";
 import ShapeEditor from "@/components/ShapeEditor";
 
@@ -12,5 +13,14 @@ export default function EditorPage() {
       </p>
     );
   }
-  return <ShapeEditor />;
+  return (
+    <>
+      <p style={{ padding: "8px 16px 0", margin: 0 }}>
+        <Link href="/editor/labels" style={{ color: "#8e3b5e" }}>
+          Edit text labels →
+        </Link>
+      </p>
+      <ShapeEditor />
+    </>
+  );
 }
