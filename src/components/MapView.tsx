@@ -15,6 +15,7 @@ export default function MapView() {
     getBrowserSupabase()
       .from("zones")
       .select("*")
+      .is("archived_at", null)
       .order("sort_order")
       .then(({ data, error }) => {
         if (error) setError(error.message);
