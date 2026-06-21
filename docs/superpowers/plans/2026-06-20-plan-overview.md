@@ -18,8 +18,10 @@ The edit gate (Plan 2) is pulled **earlier** than spec §8 (which had it as Phas
 all write features depend on it, so building the auth boundary first means the tracker and
 editor routes are gated from the start rather than retrofitted.
 
-## Deferred follow-ups (v1, not yet built)
-- **Zone photos** (Plan 3 Task 6): `zone-photos` storage bucket, gated upload, chronological gallery with `taken_at`. Schema (`zone_photos`) already exists; UI + bucket deferred during the overnight run to keep momentum.
+## Post-v1 PRs (after the overnight run)
+- **PR #2 — privacy scrub** (merged): removed address from metadata; survey out of public/repo.
+- **PR #3 — survey-accurate base map** (merged): traced red property line, correct proportions, frontage parkway, recomputed hardscape, repositioned zones.
+- **PR Zone Photos** (this): public `zone-photos` bucket, gated multipart upload (`/api/zone-photos`), timestamped chronological gallery in the zone panel (`taken_at`), public view + gated delete. Run `node scripts/setup-storage.mjs` once to create the bucket. Foundation for the "through the seasons" timeline.
 
 ## Deferred to v2 (not in any plan above)
 Google SSO; through-the-seasons photo timelines; plant detail pages; spend/inventory

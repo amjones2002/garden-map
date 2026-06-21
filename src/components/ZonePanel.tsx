@@ -3,7 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { useEditMode } from "@/lib/edit-mode";
-import type { Zone, Plant, Purchase } from "@/lib/types";
+import type { Zone, Plant, Purchase, ZonePhoto } from "@/lib/types";
+import { publicPhotoUrl, sortChronological } from "@/lib/photos";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 const overlay: React.CSSProperties = {
   position: "fixed",
@@ -29,17 +32,21 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
   const { unlocked } = useEditMode();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [photos, setPhotos] = useState<ZonePhoto[]>([]);
   const [newPlant, setNewPlant] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     const sb = getBrowserSupabase();
-    const [p, pu] = await Promise.all([
+    const [p, pu, ph] = await Promise.all([
       sb.from("plants").select("*").eq("zone_id", zone.id).order("sort_order"),
       sb.from("purchases").select("*").eq("zone_id", zone.id).order("created_at", { ascending: false }).limit(5),
+      sb.from("zone_photos").select("*").eq("zone_id", zone.id),
     ]);
     setPlants((p.data ?? []) as Plant[]);
     setPurchases((pu.data ?? []) as Purchase[]);
+    setPhotos(sortChronological((ph.data ?? []) as ZonePhoto[]));
   }, [zone.id]);
 
   useEffect(() => {
@@ -67,6 +74,29 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
     load();
   }
 
+  async function uploadPhoto(file: File) {
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("zone_id", zone.id);
+    // Use the file's last-modified date as the capture date (EXIF can refine later).
+    if (file.lastModified) fd.append("taken_at", new Date(file.lastModified).toISOString());
+    await fetch("/api/zone-photos", { method: "POST", body: fd });
+    setUploading(false);
+    load();
+  }
+
+  async function removePhoto(id: string) {
+    if (!confirm("Delete this photo?")) return;
+    await fetch(`/api/zone-photos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    load();
+  }
+
+  const fmtDate = (p: ZonePhoto) => {
+    const d = p.taken_at ?? p.uploaded_at;
+    return d ? new Date(d).toLocaleDateString() : "";
+  };
+
   return (
     <div style={overlay} onClick={onClose}>
       <div style={sheet} onClick={(e) => e.stopPropagation()}>
@@ -82,7 +112,47 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
         </div>
         {zone.description && <p style={{ color: "#5a5340" }}>{zone.description}</p>}
 
-        <h3 style={{ color: "#7a6a44", marginBottom: 4 }}>Currently planted</h3>
+        <h3 style={{ color: "#7a6a44", marginBottom: 4 }}>Photos</h3>
+        {photos.length === 0 && <p style={{ color: "#8a8268", margin: 0 }}>No photos yet.</p>}
+        {photos.length > 0 && (
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+            {photos.map((ph) => (
+              <figure key={ph.id} style={{ margin: 0, flex: "0 0 auto", width: 140 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={publicPhotoUrl(SUPABASE_URL, ph.storage_path)}
+                  alt={ph.caption ?? `${zone.name} photo`}
+                  style={{ width: 140, height: 105, objectFit: "cover", borderRadius: 8, border: "1px solid #cbb994" }}
+                />
+                <figcaption style={{ fontSize: 11, color: "#8a8268", display: "flex", justifyContent: "space-between", gap: 4 }}>
+                  <span>{fmtDate(ph)}</span>
+                  {unlocked && (
+                    <button onClick={() => removePhoto(ph.id)} style={{ border: "none", background: "transparent", color: "#8e3b5e", cursor: "pointer", fontSize: 11 }}>
+                      delete
+                    </button>
+                  )}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
+        {unlocked && (
+          <label style={{ display: "inline-block", marginTop: 6, padding: "8px 12px", borderRadius: 8, border: "1px solid #cbb994", background: "#e3dac3", cursor: "pointer", fontSize: 13 }}>
+            {uploading ? "Uploading…" : "+ Add photo"}
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadPhoto(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+
+        <h3 style={{ color: "#7a6a44", marginBottom: 4, marginTop: 16 }}>Currently planted</h3>
         {plants.length === 0 && <p style={{ color: "#8a8268", margin: 0 }}>No plants listed yet.</p>}
         <ul style={{ marginTop: 4 }}>
           {plants.map((p) => (
