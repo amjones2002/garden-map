@@ -41,11 +41,11 @@ export default function ZoneShapes({
             <text
               x={c.x * SIZE}
               y={c.y * SIZE}
-              fontSize={22}
+              fontSize={34}
               textAnchor="middle"
               dominantBaseline="middle"
               fill="#2f3722"
-              style={{ pointerEvents: "none", fontWeight: 600 }}
+              style={{ pointerEvents: "none", fontFamily: "var(--font-hand), cursive" }}
             >
               {z.label ?? z.name}
             </text>
