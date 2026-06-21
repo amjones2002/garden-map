@@ -8,6 +8,8 @@ export type Zone = {
   fill_color: string | null;
   sort_order: number;
   created_at: string;
+  updated_at?: string;
+  archived_at?: string | null;
 };
 
 export type Vendor = {

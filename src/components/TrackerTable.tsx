@@ -29,7 +29,7 @@ export default function TrackerTable() {
     const sb = getBrowserSupabase();
     const [p, z, v] = await Promise.all([
       sb.from("purchases").select("*").order("created_at", { ascending: false }),
-      sb.from("zones").select("*").order("sort_order"),
+      sb.from("zones").select("*").is("archived_at", null).order("sort_order"),
       sb.from("vendors").select("*").order("name"),
     ]);
     setPurchases((p.data ?? []) as Purchase[]);

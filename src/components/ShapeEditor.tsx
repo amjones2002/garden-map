@@ -16,13 +16,18 @@ export default function ShapeEditor() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [showOthers, setShowOthers] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState("#7aa329");
   const [msg, setMsg] = useState<string | null>(null);
   const movedRef = useRef(false);
 
   const loadZones = useCallback(async () => {
-    const { data } = await getBrowserSupabase().from("zones").select("*").order("sort_order");
+    let q = getBrowserSupabase().from("zones").select("*").order("sort_order");
+    if (!showArchived) q = q.is("archived_at", null);
+    const { data } = await q;
     setZones((data ?? []) as Zone[]);
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     loadZones();
@@ -35,6 +40,45 @@ export default function ShapeEditor() {
     const z = zones.find((x) => x.id === id);
     const shape = (z?.shape ?? []) as Point[];
     setPoints(shape.map((p) => ({ x: p.x * SIZE, y: p.y * SIZE })));
+    setEditName(z?.label ?? z?.name ?? "");
+    setEditColor(z?.fill_color ?? "#7aa329");
+  }
+
+  async function newZone() {
+    const name = prompt("New zone name?")?.trim();
+    if (!name) return;
+    const r = await fetch("/api/zones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) {
+      setMsg("Could not create zone.");
+      return;
+    }
+    const z = (await r.json()) as Zone;
+    await loadZones();
+    setSelectedId(z.id);
+    setPoints([]);
+    setEditName(z.label ?? z.name);
+    setEditColor(z.fill_color ?? "#7aa329");
+    setMsg(`Created “${z.name}”. Tap the map to draw its shape, then Save.`);
+  }
+
+  async function toggleArchive() {
+    const z = zones.find((x) => x.id === selectedId);
+    if (!z) return;
+    const archiving = !z.archived_at;
+    if (archiving && !confirm(`Archive “${z.name}”? It will be hidden from the public map; data is kept and can be restored.`)) return;
+    await fetch("/api/zones", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: z.id, archived: archiving }),
+    });
+    await loadZones();
+    setSelectedId("");
+    setPoints([]);
+    setMsg(archiving ? "Zone archived." : "Zone restored.");
   }
 
   function svgPoint(e: React.PointerEvent): Point {
@@ -90,7 +134,13 @@ export default function ShapeEditor() {
     const r = await fetch("/api/zones", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selectedId, shape }),
+      body: JSON.stringify({
+        id: selectedId,
+        shape,
+        name: editName.trim() || undefined,
+        label: editName.trim() || undefined,
+        fill_color: editColor,
+      }),
     });
     if (r.ok) {
       setMsg("Saved — the live map now uses this shape.");
@@ -113,9 +163,35 @@ export default function ShapeEditor() {
         <select style={ctrl} value={selectedId} onChange={(e) => selectZone(e.target.value)}>
           <option value="">— choose a zone —</option>
           {zones.map((z) => (
-            <option key={z.id} value={z.id}>{z.name}</option>
+            <option key={z.id} value={z.id}>
+              {z.name}
+              {z.archived_at ? " (archived)" : ""}
+            </option>
           ))}
         </select>
+        <button style={{ ...ctrl, background: "#e3dac3" }} onClick={newZone}>+ New zone</button>
+        <label style={{ ...ctrl, display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> show archived
+        </label>
+      </div>
+
+      {selectedZone && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <input
+            style={{ ...ctrl, cursor: "text" }}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="zone name"
+            aria-label="zone name"
+          />
+          <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} aria-label="zone color" style={{ width: 44, height: 38, border: "1px solid #cbb994", borderRadius: 8, background: "#f5efe0" }} />
+          <button style={{ ...ctrl, color: "#8e3b5e" }} onClick={toggleArchive}>
+            {selectedZone.archived_at ? "Restore" : "Archive"}
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         <button style={ctrl} onClick={() => setPoints((p) => p.slice(0, -1))} disabled={!points.length}>Undo point</button>
         <button style={ctrl} onClick={removeSelected} disabled={selectedPoint === null}>Delete point</button>
         <button style={ctrl} onClick={() => selectedId && selectZone(selectedId)} disabled={!selectedId}>Reset</button>
