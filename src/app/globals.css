@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Wood-element feng shui palette on aged paper */
+  --paper: #f3ead4;
+  --paper-2: #ece0c4;
+  --ink: #3a3324;
+  --ink-soft: #6b5f44;
+  --green: #7aa329;
+  --green-bright: #9bbf4a;
+  --green-deep: #5e6b3a;
+  --burgundy: #8e3b5e;
+  --burgundy-deep: #6e2d4a;
+  --tan: #cbb994;
+  --tan-line: #b9a87f;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --font-hand: var(--font-hand);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(255, 252, 240, 0.6), transparent 42%),
+    radial-gradient(circle at 88% 85%, rgba(150, 116, 70, 0.12), transparent 46%),
+    radial-gradient(circle at 50% 50%, rgba(120, 95, 55, 0.05), transparent 70%);
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-hand), ui-serif, Georgia, serif;
+  color: var(--ink);
+  letter-spacing: 0.4px;
+  font-weight: 400;
+}
+
+h1 {
+  font-size: 2rem;
 }

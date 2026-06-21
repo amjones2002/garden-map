@@ -25,7 +25,7 @@ export default function BaseMap() {
 
       {/* House — One Story Brick */}
       <rect x="300" y="395" width="345" height="205" rx="6" fill="#cdb79b" stroke="#9c8567" strokeWidth={3} />
-      <text x="472" y="505" fontSize="16" fill="#7a6a44" textAnchor="middle">house</text>
+      <text x="472" y="505" fontSize="26" fill="#7a6a44" textAnchor="middle" fontFamily="var(--font-hand), cursive">house</text>
       {/* Covered porch (west of house) */}
       <rect x="258" y="430" width="44" height="120" rx="4" fill="#d8cbb0" stroke="#9c8567" strokeWidth={2} />
       {/* Concrete patio (SE of house) */}
@@ -36,13 +36,13 @@ export default function BaseMap() {
       <circle cx="700" cy="640" r="26" fill="#7fb9c6" stroke="#4f93a0" strokeWidth={3} />
 
       {/* Street labels */}
-      <text x="70" y="470" fontSize="22" fill="#7a6a44" transform="rotate(-78 70 470)" fontStyle="italic">
+      <text x="70" y="470" fontSize="34" fill="#7a6a44" transform="rotate(-78 70 470)" fontFamily="var(--font-hand), cursive">
         Eastview Cir
       </text>
-      <text x="430" y="950" fontSize="22" fill="#7a6a44" fontStyle="italic">
+      <text x="430" y="955" fontSize="34" fill="#7a6a44" fontFamily="var(--font-hand), cursive">
         Baltimore Drive
       </text>
-      <text x="930" y="490" fontSize="16" fill="#9c8567" transform="rotate(90 930 490)">
+      <text x="930" y="490" fontSize="24" fill="#9c8567" transform="rotate(90 930 490)" fontFamily="var(--font-hand), cursive">
         alley
       </text>
     </g>
