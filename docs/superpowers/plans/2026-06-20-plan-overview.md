@@ -11,7 +11,7 @@ own. Write each plan's detail only when the prior plan is working (so it reflect
 | 3 | Map View & Zone Panel — stylized base map, zones from shape data, tap → detail panel (plants + purchases), gated plant CRUD | **Done (merged to main)** — photo upload deferred (see below) | `2026-06-20-plan-3-map-zone-panel.md` |
 | 4 | Purchase Tracker — table CRUD, sort/filter, vendor inline-add, auto-add-to-plant-list, CSV import/export | **Done (merged to main)** | `2026-06-20-plan-4-tracker.md` |
 | 5 | Zone Shape Editor — polygon draw/edit (over stylized base; optional survey overlay), save normalized coords | **Done (merged to main)** | `2026-06-20-plan-5-shape-editor.md` |
-| 6 | Styling & Deploy — BHL botanical aesthetic, hand-lettered labels, Vercel deploy, mobile QA | Not yet written | — |
+| 6 | Styling & Deploy — BHL botanical aesthetic, hand-lettered labels, Vercel deploy | **Done (merged + DEPLOYED)** — live at texas-garden-map.vercel.app | `2026-06-20-plan-6-styling-deploy.md` |
 
 ## Ordering note
 The edit gate (Plan 2) is pulled **earlier** than spec §8 (which had it as Phase 6). Reason:

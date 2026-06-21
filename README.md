@@ -5,6 +5,8 @@ Interactive yard map & plant purchase tracker for Berkner Park, Richardson, TX
 property's planting zones plus a tracker for plant purchases — a taste of the Texas
 prairie and desert, shareable with anyone.
 
+**Live:** https://texas-garden-map.vercel.app — public read-only; tap “Unlock editing” (top-right) and enter the edit password to add/edit data and reshape zones.
+
 ## Stack
 
 Next.js 16 (App Router, TypeScript) · Supabase (Postgres + Storage) · Vercel.
