@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Zone, Vendor, Purchase } from "@/lib/types";
 import { PURCHASE_STATUSES } from "@/lib/purchases";
+import PlantField from "./PlantField";
 
 const field: React.CSSProperties = {
   minHeight: 38,
@@ -33,6 +34,7 @@ export default function PurchaseForm({
   const defaultZoneId = defaultZoneSlug ? zones.find((z) => z.slug === defaultZoneSlug)?.id ?? "" : "";
   const [common, setCommon] = useState(initial?.common_name ?? "");
   const [botanical, setBotanical] = useState(initial?.botanical_name ?? "");
+  const [catalogId, setCatalogId] = useState<string | null>(initial?.catalog_id ?? null);
   const [zoneId, setZoneId] = useState(initial?.zone_id ?? defaultZoneId);
   const [vendorId, setVendorId] = useState(initial?.vendor_id ?? "");
   const [date, setDate] = useState(initial?.purchase_date ?? "");
@@ -41,7 +43,6 @@ export default function PurchaseForm({
   const [qty, setQty] = useState(initial?.quantity ?? 1);
   const [status, setStatus] = useState(initial?.status ?? "planted");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [alsoAdd, setAlsoAdd] = useState(initial ? false : true);
   const [newVendor, setNewVendor] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export default function PurchaseForm({
       quantity: Number(qty) || 1,
       status,
       notes: notes.trim() || null,
-      also_add_to_plant_list: alsoAdd,
+      catalog_id: catalogId,
     };
     const r = await fetch("/api/purchases", {
       method: initial ? "PATCH" : "POST",
@@ -100,7 +101,15 @@ export default function PurchaseForm({
       {err && <p style={{ color: "crimson", margin: 0 }}>{err}</p>}
       <div>
         <label style={label}>Plant name *</label>
-        <input style={field} value={common} onChange={(e) => setCommon(e.target.value)} required />
+        <PlantField
+          commonName={common}
+          botanicalName={botanical ?? ""}
+          onChange={(v) => {
+            setCommon(v.common_name);
+            setBotanical(v.botanical_name);
+            setCatalogId(v.catalog_id);
+          }}
+        />
       </div>
       <div>
         <label style={label}>Botanical name</label>
@@ -161,11 +170,6 @@ export default function PurchaseForm({
         <label style={label}>Notes</label>
         <textarea style={{ ...field, minHeight: 54 }} value={notes ?? ""} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      {!initial && zoneId && (
-        <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
-          <input type="checkbox" checked={alsoAdd} onChange={(e) => setAlsoAdd(e.target.checked)} /> also add to this zone&apos;s plant list
-        </label>
-      )}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="submit" disabled={busy} style={{ ...field, width: "auto", cursor: "pointer", background: "#9bbf4a", fontWeight: 600 }}>
           {busy ? "Saving…" : "Save"}
