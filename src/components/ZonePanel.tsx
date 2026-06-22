@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { useEditMode } from "@/lib/edit-mode";
-import type { Zone, Plant, Purchase, ZonePhoto } from "@/lib/types";
+import type { Zone, Purchase, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl, sortChronological } from "@/lib/photos";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -30,22 +30,20 @@ const sheet: React.CSSProperties = {
 
 export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () => void }) {
   const { unlocked } = useEditMode();
-  const [plants, setPlants] = useState<Plant[]>([]);
+  const [planted, setPlanted] = useState<Purchase[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [photos, setPhotos] = useState<ZonePhoto[]>([]);
-  const [newPlant, setNewPlant] = useState("");
-  const [busy, setBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ total: number; done: number } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const sb = getBrowserSupabase();
-    const [p, pu, ph] = await Promise.all([
-      sb.from("plants").select("*").eq("zone_id", zone.id).order("sort_order"),
+    const [planted, pu, ph] = await Promise.all([
+      sb.from("purchases").select("*").eq("zone_id", zone.id).eq("status", "planted").order("common_name"),
       sb.from("purchases").select("*").eq("zone_id", zone.id).order("created_at", { ascending: false }).limit(5),
       sb.from("zone_photos").select("*").eq("zone_id", zone.id),
     ]);
-    setPlants((p.data ?? []) as Plant[]);
+    setPlanted((planted.data ?? []) as Purchase[]);
     setPurchases((pu.data ?? []) as Purchase[]);
     setPhotos(sortChronological((ph.data ?? []) as ZonePhoto[]));
   }, [zone.id]);
@@ -53,27 +51,6 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
   useEffect(() => {
     load();
   }, [load]);
-
-  async function addPlant() {
-    const name = newPlant.trim();
-    if (!name) return;
-    setBusy(true);
-    await fetch("/api/plants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ zone_id: zone.id, common_name: name }),
-    });
-    setNewPlant("");
-    setBusy(false);
-    load();
-  }
-
-  async function removePlant(id: string) {
-    setBusy(true);
-    await fetch(`/api/plants?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    setBusy(false);
-    load();
-  }
 
   async function uploadPhotos(files: File[]) {
     setUploadError(null);
@@ -209,43 +186,16 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
         )}
 
         <h3 style={{ color: "#7a6a44", marginBottom: 4, marginTop: 16 }}>Currently planted</h3>
-        {plants.length === 0 && <p style={{ color: "#8a8268", margin: 0 }}>No plants listed yet.</p>}
+        {planted.length === 0 && <p style={{ color: "#8a8268", margin: 0 }}>No plants listed yet.</p>}
         <ul style={{ marginTop: 4 }}>
-          {plants.map((p) => (
-            <li key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <span>
-                {p.common_name}
-                {p.botanical_name ? <em style={{ color: "#8a8268" }}> — {p.botanical_name}</em> : null}
-              </span>
-              {unlocked && (
-                <button onClick={() => removePlant(p.id)} disabled={busy} aria-label={`Remove ${p.common_name}`} style={{ border: "none", background: "transparent", color: "#8e3b5e", cursor: "pointer" }}>
-                  remove
-                </button>
-              )}
+          {planted.map((p) => (
+            <li key={p.id}>
+              {p.common_name}
+              {p.botanical_name ? <em style={{ color: "#8a8268" }}> — {p.botanical_name}</em> : null}
+              {p.purchase_date ? <span style={{ color: "#8a8268" }}> · {p.purchase_date}</span> : null}
             </li>
           ))}
         </ul>
-
-        {unlocked && (
-          <form
-            style={{ display: "flex", gap: 6, marginTop: 8 }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              addPlant();
-            }}
-          >
-            <input
-              value={newPlant}
-              onChange={(e) => setNewPlant(e.target.value)}
-              placeholder="add a plant…"
-              aria-label="add a plant"
-              style={{ flex: 1, minHeight: 38, padding: "6px 10px", borderRadius: 8, border: "1px solid #cbb994" }}
-            />
-            <button type="submit" disabled={busy} style={{ minHeight: 38, padding: "0 12px", borderRadius: 8, border: "1px solid #cbb994", background: "#9bbf4a", cursor: "pointer" }}>
-              Add
-            </button>
-          </form>
-        )}
 
         <h3 style={{ color: "#7a6a44", marginBottom: 4, marginTop: 16 }}>Recent purchases</h3>
         {purchases.length === 0 && <p style={{ color: "#8a8268", margin: 0 }}>No purchases logged for this zone yet.</p>}

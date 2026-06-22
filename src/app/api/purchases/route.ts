@@ -15,7 +15,6 @@ type PurchaseInput = {
   quantity?: number;
   status?: string;
   notes?: string | null;
-  also_add_to_plant_list?: boolean;
 };
 
 function cleanFields(b: PurchaseInput) {
@@ -48,15 +47,6 @@ export async function POST(req: Request) {
   const { data, error } = await supabase.from("purchases").insert(fields).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // Optionally mirror into the zone's curated plant list.
-  if (body.also_add_to_plant_list && fields.zone_id) {
-    await supabase.from("plants").insert({
-      zone_id: fields.zone_id,
-      common_name: fields.common_name,
-      botanical_name: fields.botanical_name,
-      catalog_id: fields.catalog_id,
-    });
-  }
   return NextResponse.json(data, { status: 201 });
 }
 
