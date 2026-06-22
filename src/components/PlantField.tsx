@@ -74,7 +74,7 @@ export default function PlantField({
         onFocus={() => setOpen(true)}
         required
       />
-      {open && commonName.trim().length >= 2 && results.length > 0 && (
+      {open && commonName.trim().length >= 2 && (
         <ul
           style={{
             listStyle: "none",

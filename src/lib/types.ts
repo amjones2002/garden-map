@@ -32,7 +32,6 @@ export type MapLabel = {
   archived_at: string | null;
 };
 
-
 export type PurchaseStatus = "planted" | "pending" | "replaced" | "died";
 
 export type Purchase = {
