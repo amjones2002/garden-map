@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireEdit } from "@/lib/require-edit";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { ZONE_PHOTOS_BUCKET } from "@/lib/photos";
 
 export async function POST(req: Request) {
   if (!(await requireEdit())) return NextResponse.json({ error: "locked" }, { status: 401 });
@@ -29,6 +30,10 @@ export async function POST(req: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    // best-effort cleanup of the orphaned object
+    await supabase.storage.from(ZONE_PHOTOS_BUCKET).remove([storage_path]);
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
   return NextResponse.json(data, { status: 201 });
 }
