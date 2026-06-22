@@ -32,14 +32,6 @@ export type MapLabel = {
   archived_at: string | null;
 };
 
-export type Plant = {
-  id: string;
-  zone_id: string;
-  common_name: string;
-  botanical_name: string | null;
-  catalog_id: string | null;
-  sort_order: number;
-};
 
 export type PurchaseStatus = "planted" | "pending" | "replaced" | "died";
 
