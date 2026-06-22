@@ -9,6 +9,7 @@ type LabelBody = {
   y?: number;
   font_size?: number;
   color?: string;
+  rotation?: number;
 };
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       y: clamp01(typeof body.y === "number" ? body.y : 0.5),
       font_size: typeof body.font_size === "number" ? body.font_size : 30,
       color: body.color ?? null,
+      rotation: typeof body.rotation === "number" ? body.rotation : 0,
     })
     .select()
     .single();
@@ -53,6 +55,7 @@ export async function PATCH(req: Request) {
   if (typeof body.x === "number") update.x = clamp01(body.x);
   if (typeof body.y === "number") update.y = clamp01(body.y);
   if (typeof body.font_size === "number") update.font_size = body.font_size;
+  if (typeof body.rotation === "number") update.rotation = body.rotation;
   if (typeof body.color === "string") update.color = body.color;
   if (Object.keys(update).length === 1) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });
