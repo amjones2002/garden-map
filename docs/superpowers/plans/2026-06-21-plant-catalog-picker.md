@@ -1,77 +1,25 @@
-# Plant Catalog Picker Implementation Plan
+# Purchase-Driven Plant Intake + Catalog Picker — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the free-text "add a plant" input in a zone with a catalog-backed typeahead picker that links entries to `plant_catalog`, allows a free-text escape hatch, supports an optional planting date, lets users stage and save several plants at once, and warns (but doesn't block) on truly-duplicate entries.
+**Goal:** Make purchase the single intake point for plants — drop the standalone `plants` list, derive a zone's "Currently planted" from its purchases (`status = 'planted'`), and give `PurchaseForm` a catalog-backed typeahead that links each plant to `plant_catalog` while still allowing off-catalog entries.
 
-**Architecture:** All decision logic (search ranking, query sanitizing, duplicate detection) lives in a new pure module `src/lib/plant-catalog.ts` with unit tests. A new public read endpoint `GET /api/plant-catalog` runs the catalog search. The existing `POST /api/plants` gains array (batch) support. A new `PlantPicker` client component holds the typeahead + staging UI and is wired into `ZonePanel`. One migration adds an optional `planted_date` column.
+**Architecture:** Search/ranking logic is a pure, tested module `src/lib/plant-catalog.ts`. A new public read endpoint `GET /api/plant-catalog` runs the search. A reusable `PlantField` component provides the typeahead and is dropped into `PurchaseForm`, which already persists `catalog_id` through the existing `/api/purchases` route. The `plants` table, its `/api/plants` route, the standalone add-plant box in `ZonePanel`, and the `also_add_to_plant_list` mirror are removed; `ZonePanel` reads currently-planted plants from purchases.
 
 **Tech Stack:** Next.js 16 (App Router, route handlers), Supabase (`@supabase/supabase-js`), React 19, TypeScript, Vitest (jsdom).
 
 ## Global Constraints
 
 - **Read the relevant Next.js guide in `node_modules/next/dist/docs/` before writing route/component code** — this Next.js (16.2.9) has breaking changes vs. training data (per AGENTS.md).
-- Writes go only through route handlers using the service-role client `getServerSupabase()` from `src/lib/supabase/server.ts` (RLS blocks anon writes). Never import the server Supabase client into a client component.
+- Writes go only through route handlers using the service-role client `getServerSupabase()` from `src/lib/supabase/server.ts`. Never import the server Supabase client into a client component.
 - Mutating endpoints must be gated with `if (!(await requireEdit())) return NextResponse.json({ error: "locked" }, { status: 401 });`. Read-only endpoints are not gated.
-- Date columns are Postgres `date`/`timestamptz` and typed `string | null` in TypeScript (cf. `Purchase.purchase_date`).
+- Client components read data with the browser client `getBrowserSupabase()` from `src/lib/supabase/client.ts` (RLS allows public reads).
 - Tests live in `tests/**/*.test.{ts,tsx}` and run with `npm test` (`vitest run`). Pure logic is tested in `src/lib/*`; route handlers and components are kept thin and not directly unit-tested (existing project convention).
-- Migrations are plain SQL files in `supabase/migrations/`, applied with `node scripts/migrate.mjs <filename>`. Use `if not exists` for idempotency.
+- Migrations are plain SQL files in `supabase/migrations/`, applied with `node scripts/migrate.mjs <filename>`. Use `if exists`/`if not exists` for idempotency. Applying to the live DB is done by the maintainer, not part of task verification.
 
 ---
 
-### Task 1: Add `planted_date` to the data model
-
-**Files:**
-- Create: `supabase/migrations/0004_plant_planted_date.sql`
-- Modify: `src/lib/types.ts` (the `Plant` type, ~lines 35-42)
-
-**Interfaces:**
-- Consumes: nothing.
-- Produces: `Plant.planted_date: string | null` — relied on by Tasks 4, 5, 6.
-
-- [ ] **Step 1: Write the migration file**
-
-Create `supabase/migrations/0004_plant_planted_date.sql`:
-
-```sql
--- Add an optional planting date to zone plant entries.
--- Lets the same species appear more than once with different ages.
-alter table plants add column if not exists planted_date date;
-```
-
-- [ ] **Step 2: Add the field to the `Plant` type**
-
-In `src/lib/types.ts`, change the `Plant` type to include `planted_date`:
-
-```ts
-export type Plant = {
-  id: string;
-  zone_id: string;
-  common_name: string;
-  botanical_name: string | null;
-  catalog_id: string | null;
-  planted_date: string | null;
-  sort_order: number;
-};
-```
-
-- [ ] **Step 3: Typecheck**
-
-Run: `npx tsc --noEmit`
-Expected: PASS (no errors).
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add supabase/migrations/0004_plant_planted_date.sql src/lib/types.ts
-git commit -m "feat: add optional planted_date to plants"
-```
-
-Note: applying the migration to the live DB (`node scripts/migrate.mjs 0004_plant_planted_date.sql`) requires `SUPABASE_DB_URL` and is run by the maintainer, not part of this task's verification.
-
----
-
-### Task 2: Catalog search ranking + query sanitizer (pure logic)
+### Task 1: Catalog search ranking + query sanitizer (pure logic)
 
 **Files:**
 - Create: `src/lib/plant-catalog.ts`
@@ -196,151 +144,14 @@ git commit -m "feat: catalog search ranking and query sanitizer"
 
 ---
 
-### Task 3: Duplicate detection (pure logic)
-
-**Files:**
-- Modify: `src/lib/plant-catalog.ts`
-- Modify: `tests/plant-catalog.test.ts`
-
-**Interfaces:**
-- Consumes: nothing from earlier tasks (self-contained types below).
-- Produces:
-  - `type PlantEntry = { catalog_id: string | null; common_name: string; planted_date: string | null }`
-  - `isSamePlant(a: PlantEntry, b: PlantEntry): boolean` — same `catalog_id` when both are catalog-linked; otherwise case-insensitive `common_name` match. Two entries with the same `common_name` but different non-null `catalog_id`s are NOT the same.
-  - `isDuplicateEntry(a: PlantEntry, b: PlantEntry): boolean` — `isSamePlant` AND (both dates blank OR equal).
-  - `findExistingDuplicate(entry: PlantEntry, existing: PlantEntry[]): boolean` — true if any existing entry is a duplicate of `entry`.
-  - `flagBatchDuplicates(rows: PlantEntry[]): boolean[]` — index-aligned; `true` where a row duplicates an earlier row in the same array.
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `tests/plant-catalog.test.ts`:
-
-```ts
-import {
-  isSamePlant,
-  isDuplicateEntry,
-  findExistingDuplicate,
-  flagBatchDuplicates,
-  type PlantEntry,
-} from "../src/lib/plant-catalog";
-
-const entry = (over: Partial<PlantEntry> = {}): PlantEntry => ({
-  catalog_id: null,
-  common_name: "Gregg's Mistflower",
-  planted_date: null,
-  ...over,
-});
-
-describe("isSamePlant", () => {
-  it("matches catalog-linked entries by catalog_id", () => {
-    expect(isSamePlant(entry({ catalog_id: "x" }), entry({ catalog_id: "x", common_name: "other" }))).toBe(true);
-    expect(isSamePlant(entry({ catalog_id: "x" }), entry({ catalog_id: "y" }))).toBe(false);
-  });
-  it("matches custom entries by case-insensitive common name", () => {
-    expect(isSamePlant(entry({ common_name: "Sage" }), entry({ common_name: "sage" }))).toBe(true);
-  });
-});
-
-describe("isDuplicateEntry", () => {
-  it("is true for same plant with both dates blank", () => {
-    expect(isDuplicateEntry(entry({ catalog_id: "x" }), entry({ catalog_id: "x" }))).toBe(true);
-  });
-  it("is true for same plant with equal dates", () => {
-    expect(
-      isDuplicateEntry(entry({ catalog_id: "x", planted_date: "2025-01-01" }), entry({ catalog_id: "x", planted_date: "2025-01-01" })),
-    ).toBe(true);
-  });
-  it("is false for same plant with different dates", () => {
-    expect(
-      isDuplicateEntry(entry({ catalog_id: "x", planted_date: "2024-01-01" }), entry({ catalog_id: "x", planted_date: "2025-01-01" })),
-    ).toBe(false);
-  });
-});
-
-describe("findExistingDuplicate", () => {
-  it("detects a duplicate in the existing list", () => {
-    const existing = [entry({ catalog_id: "x" })];
-    expect(findExistingDuplicate(entry({ catalog_id: "x" }), existing)).toBe(true);
-    expect(findExistingDuplicate(entry({ catalog_id: "y" }), existing)).toBe(false);
-  });
-});
-
-describe("flagBatchDuplicates", () => {
-  it("flags later rows that duplicate an earlier row", () => {
-    const rows = [
-      entry({ catalog_id: "x" }),
-      entry({ catalog_id: "x" }), // dup of row 0
-      entry({ catalog_id: "x", planted_date: "2025-01-01" }), // not a dup (diff date)
-    ];
-    expect(flagBatchDuplicates(rows)).toEqual([false, true, false]);
-  });
-});
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `npm test -- plant-catalog`
-Expected: FAIL — `isSamePlant` etc. not exported.
-
-- [ ] **Step 3: Write the implementation**
-
-Append to `src/lib/plant-catalog.ts`:
-
-```ts
-export type PlantEntry = {
-  catalog_id: string | null;
-  common_name: string;
-  planted_date: string | null;
-};
-
-/** Same species: by catalog_id when both linked, else case-insensitive common_name. */
-export function isSamePlant(a: PlantEntry, b: PlantEntry): boolean {
-  if (a.catalog_id && b.catalog_id) return a.catalog_id === b.catalog_id;
-  if (a.catalog_id || b.catalog_id) return false;
-  return a.common_name.trim().toLowerCase() === b.common_name.trim().toLowerCase();
-}
-
-const blank = (d: string | null): boolean => d === null || d.trim() === "";
-
-/** Truly-duplicate: same plant AND (both dates blank OR equal). */
-export function isDuplicateEntry(a: PlantEntry, b: PlantEntry): boolean {
-  if (!isSamePlant(a, b)) return false;
-  if (blank(a.planted_date) && blank(b.planted_date)) return true;
-  return a.planted_date === b.planted_date;
-}
-
-export function findExistingDuplicate(entry: PlantEntry, existing: PlantEntry[]): boolean {
-  return existing.some((e) => isDuplicateEntry(entry, e));
-}
-
-/** Index-aligned flags: true where a row duplicates an earlier row in the array. */
-export function flagBatchDuplicates(rows: PlantEntry[]): boolean[] {
-  return rows.map((row, i) => rows.slice(0, i).some((earlier) => isDuplicateEntry(row, earlier)));
-}
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `npm test -- plant-catalog`
-Expected: PASS (all tests, including the Task 2 set).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/lib/plant-catalog.ts tests/plant-catalog.test.ts
-git commit -m "feat: plant duplicate detection logic"
-```
-
----
-
-### Task 4: Catalog search endpoint
+### Task 2: Catalog search endpoint
 
 **Files:**
 - Create: `src/app/api/plant-catalog/route.ts`
 
 **Interfaces:**
-- Consumes: `sanitizeQuery`, `rankCatalogResults`, `CatalogResult` from `src/lib/plant-catalog.ts` (Task 2).
-- Produces: `GET /api/plant-catalog?q=<text>` → `{ results: CatalogResult[] }` (max 20). Used by the `PlantPicker` (Task 6).
+- Consumes: `sanitizeQuery`, `rankCatalogResults`, `CatalogResult` from `src/lib/plant-catalog.ts` (Task 1).
+- Produces: `GET /api/plant-catalog?q=<text>` → `{ results: CatalogResult[] }` (max 20). Used by `PlantField` (Task 3).
 
 - [ ] **Step 1: Read the Next.js route handler guide**
 
@@ -381,7 +192,7 @@ Expected: PASS.
 
 - [ ] **Step 4: Manual smoke (optional, needs env)**
 
-If `.env.local` is configured, run `npm run dev` and request `/api/plant-catalog?q=sage`; expect a JSON `{ results: [...] }`. Skip if env is unavailable — the logic is covered by Task 2's unit tests.
+If `.env.local` is configured, run `npm run dev` and request `/api/plant-catalog?q=sage`; expect JSON `{ results: [...] }`. Skip if env is unavailable — the logic is covered by Task 1's unit tests.
 
 - [ ] **Step 5: Commit**
 
@@ -392,78 +203,156 @@ git commit -m "feat: plant catalog search endpoint"
 
 ---
 
-### Task 5: Batch insert support in `POST /api/plants`
+### Task 3: `PlantField` catalog typeahead component
 
 **Files:**
-- Modify: `src/app/api/plants/route.ts`
+- Create: `src/components/PlantField.tsx`
 
 **Interfaces:**
-- Consumes: nothing from earlier tasks.
-- Produces: `POST /api/plants` accepts either the existing single shape `{ zone_id, common_name, botanical_name?, catalog_id?, planted_date? }` or a batch `{ zone_id, rows: [...] }`. Returns `{ inserted: number, rows: Plant[] }` for the batch path (still `201` with the single row for the single path). Used by `PlantPicker` (Task 6).
+- Consumes: `CatalogResult` from `src/lib/plant-catalog.ts` (Task 1); `GET /api/plant-catalog` (Task 2).
+- Produces: a controlled component
 
-- [ ] **Step 1: Read the existing route**
+  ```tsx
+  <PlantField
+    commonName={string}
+    botanicalName={string}
+    onChange={(v: { common_name: string; botanical_name: string; catalog_id: string | null }) => void}
+  />
+  ```
 
-Re-read `src/app/api/plants/route.ts` so the new code matches its `requireEdit` gate and error style.
+  It owns the search dropdown only; the parent owns the field values. Picking a catalog
+  match calls `onChange` with all three fields; typing free text calls `onChange` with the
+  typed `common_name`, the current `botanical_name`, and `catalog_id: null`.
 
-- [ ] **Step 2: Rewrite the POST handler**
+- [ ] **Step 1: Confirm the client-component convention**
 
-Replace the `POST` function in `src/app/api/plants/route.ts` with this (leave `DELETE` unchanged):
+`src/components/PurchaseForm.tsx` already uses `"use client"`; this component follows the same pattern. No new framework features needed.
 
-```ts
-type PlantInput = {
-  common_name?: string;
-  botanical_name?: string | null;
-  catalog_id?: string | null;
-  planted_date?: string | null;
+- [ ] **Step 2: Write the component**
+
+Create `src/components/PlantField.tsx`:
+
+```tsx
+"use client";
+import { useEffect, useRef, useState } from "react";
+import type { CatalogResult } from "@/lib/plant-catalog";
+
+const field: React.CSSProperties = {
+  minHeight: 38,
+  padding: "6px 10px",
+  borderRadius: 8,
+  border: "1px solid #cbb994",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export default function PlantField({
+  commonName,
+  botanicalName,
+  onChange,
+}: {
+  commonName: string;
+  botanicalName: string;
+  onChange: (v: { common_name: string; botanical_name: string; catalog_id: string | null }) => void;
+}) {
+  const [results, setResults] = useState<CatalogResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-function normalizePlant(zone_id: string, p: PlantInput) {
-  const common_name = (p.common_name ?? "").trim();
-  if (!common_name) return { error: "common_name required" as const };
-  if (p.catalog_id != null && !UUID_RE.test(p.catalog_id)) return { error: "invalid catalog_id" as const };
-  const planted = p.planted_date?.trim() || null;
-  if (planted && Number.isNaN(Date.parse(planted))) return { error: "invalid planted_date" as const };
-  return {
-    value: {
-      zone_id,
-      common_name,
-      botanical_name: p.botanical_name ?? null,
-      catalog_id: p.catalog_id ?? null,
-      planted_date: planted,
-    },
-  };
-}
+  useEffect(() => {
+    if (debounce.current) clearTimeout(debounce.current);
+    const q = commonName.trim();
+    if (!open || q.length < 2) {
+      setResults([]);
+      return;
+    }
+    debounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/plant-catalog?q=${encodeURIComponent(q)}`);
+        if (res.ok) setResults(((await res.json()).results ?? []) as CatalogResult[]);
+        else setResults([]);
+      } catch {
+        setResults([]);
+      }
+    }, 250);
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, [commonName, open]);
 
-/** Add one or many plants to a zone's curated list. Gated. */
-export async function POST(req: Request) {
-  if (!(await requireEdit())) {
-    return NextResponse.json({ error: "locked" }, { status: 401 });
+  function pick(r: CatalogResult) {
+    onChange({
+      common_name: r.common_name ?? r.scientific_name,
+      botanical_name: r.scientific_name,
+      catalog_id: r.id,
+    });
+    setResults([]);
+    setOpen(false);
   }
-  let body: { zone_id?: string; rows?: PlantInput[] } & PlantInput = {};
-  try {
-    body = await req.json();
-  } catch {
-    // empty
-  }
-  const zone_id = body.zone_id;
-  if (!zone_id) return NextResponse.json({ error: "zone_id required" }, { status: 400 });
 
-  const inputs: PlantInput[] = Array.isArray(body.rows) ? body.rows : [body];
-  if (inputs.length === 0) return NextResponse.json({ error: "no rows" }, { status: 400 });
-
-  const toInsert = [];
-  for (const p of inputs) {
-    const r = normalizePlant(zone_id, p);
-    if ("error" in r) return NextResponse.json({ error: r.error }, { status: 400 });
-    toInsert.push(r.value);
+  function useCustom() {
+    onChange({ common_name: commonName.trim(), botanical_name: botanicalName, catalog_id: null });
+    setResults([]);
+    setOpen(false);
   }
 
-  const supabase = getServerSupabase();
-  const { data, error } = await supabase.from("plants").insert(toInsert).select();
-  if (error) return NextResponse.json({ error: error.message, inserted: 0 }, { status: 400 });
-  return NextResponse.json({ inserted: data.length, rows: data }, { status: 201 });
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        style={field}
+        value={commonName}
+        placeholder="search the catalog…"
+        aria-label="plant name (search catalog)"
+        onChange={(e) => {
+          setOpen(true);
+          onChange({ common_name: e.target.value, botanical_name: botanicalName, catalog_id: null });
+        }}
+        onFocus={() => setOpen(true)}
+        required
+      />
+      {open && results.length > 0 && (
+        <ul
+          style={{
+            listStyle: "none",
+            margin: "2px 0 0",
+            padding: 4,
+            border: "1px solid #cbb994",
+            borderRadius: 8,
+            background: "#fff",
+            maxHeight: 200,
+            overflowY: "auto",
+            position: "absolute",
+            zIndex: 80,
+            width: "100%",
+          }}
+        >
+          {results.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => pick(r)}
+                style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 8px", cursor: "pointer" }}
+              >
+                <strong>{r.common_name ?? r.scientific_name}</strong>
+                {r.common_name && <em style={{ color: "#8a8268" }}> — {r.scientific_name}</em>}
+              </button>
+            </li>
+          ))}
+          {commonName.trim().length >= 2 && (
+            <li>
+              <button
+                type="button"
+                onClick={useCustom}
+                style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 8px", cursor: "pointer", color: "#7a6a44" }}
+              >
+                Use “{commonName.trim()}” as a custom plant
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
 }
 ```
 
@@ -475,306 +364,238 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/app/api/plants/route.ts
-git commit -m "feat: batch insert support for POST /api/plants"
+git add src/components/PlantField.tsx
+git commit -m "feat: catalog typeahead PlantField component"
 ```
-
-Note: this changes the single-add success response from the bare row to `{ inserted, rows }`. `ZonePanel`'s current `addPlant` ignores the response body and calls `load()`, so it is unaffected; Task 6 replaces that code path entirely.
 
 ---
 
-### Task 6: `PlantPicker` component + ZonePanel wiring
+### Task 4: Wire `PlantField` into `PurchaseForm`; remove the mirror checkbox
 
 **Files:**
-- Create: `src/components/PlantPicker.tsx`
-- Modify: `src/components/ZonePanel.tsx` (the `newPlant` state, `addPlant`, and the add-plant `<form>` ~lines 36, 57-69, 211-248; plus the plant list `<li>` ~lines 213-227 to show `planted_date`)
+- Modify: `src/components/PurchaseForm.tsx`
 
 **Interfaces:**
-- Consumes: `CatalogResult`, `PlantEntry`, `findExistingDuplicate`, `flagBatchDuplicates` from `src/lib/plant-catalog.ts`; `GET /api/plant-catalog` (Task 4); `POST /api/plants` batch shape (Task 5); `Plant` type with `planted_date` (Task 1).
-- Produces: `<PlantPicker zoneId={string} existing={Plant[]} onSaved={() => void} />` — renders the typeahead + staging list and posts the batch.
+- Consumes: `PlantField` (Task 3).
+- Produces: `PurchaseForm` submit payload now includes `catalog_id: string | null`; the `also_add_to_plant_list` field is gone.
 
-- [ ] **Step 1: Read the Next.js client-component guidance**
+- [ ] **Step 1: Add `catalog_id` state and the import**
 
-Confirm the `"use client"` directive convention by skimming an existing client component (`src/components/ZonePanel.tsx` already uses it) — no new framework features are needed here.
-
-- [ ] **Step 2: Write the `PlantPicker` component**
-
-Create `src/components/PlantPicker.tsx`:
+In `src/components/PurchaseForm.tsx`, add near the other imports:
 
 ```tsx
-"use client";
-import { useEffect, useRef, useState } from "react";
-import type { Plant } from "@/lib/types";
-import {
-  findExistingDuplicate,
-  flagBatchDuplicates,
-  type CatalogResult,
-  type PlantEntry,
-} from "@/lib/plant-catalog";
-
-type StagedRow = {
-  common_name: string;
-  botanical_name: string | null;
-  catalog_id: string | null;
-  planted_date: string | null;
-};
-
-const input: React.CSSProperties = {
-  minHeight: 38,
-  padding: "6px 10px",
-  borderRadius: 8,
-  border: "1px solid #cbb994",
-};
-
-export default function PlantPicker({
-  zoneId,
-  existing,
-  onSaved,
-}: {
-  zoneId: string;
-  existing: Plant[];
-  onSaved: () => void;
-}) {
-  const [text, setText] = useState("");
-  const [results, setResults] = useState<CatalogResult[]>([]);
-  const [picked, setPicked] = useState<CatalogResult | null>(null);
-  const [date, setDate] = useState("");
-  const [staged, setStaged] = useState<StagedRow[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Debounced catalog search; clears the chosen match when the text changes.
-  useEffect(() => {
-    if (picked && text === (picked.common_name ?? picked.scientific_name)) return;
-    if (debounce.current) clearTimeout(debounce.current);
-    const q = text.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    debounce.current = setTimeout(async () => {
-      const res = await fetch(`/api/plant-catalog?q=${encodeURIComponent(q)}`);
-      if (res.ok) setResults(((await res.json()).results ?? []) as CatalogResult[]);
-    }, 250);
-    return () => {
-      if (debounce.current) clearTimeout(debounce.current);
-    };
-  }, [text, picked]);
-
-  function choose(r: CatalogResult) {
-    setPicked(r);
-    setText(r.common_name ?? r.scientific_name);
-    setResults([]);
-  }
-
-  function chooseCustom() {
-    setPicked(null);
-    setResults([]);
-  }
-
-  const existingEntries: PlantEntry[] = existing.map((p) => ({
-    catalog_id: p.catalog_id,
-    common_name: p.common_name,
-    planted_date: p.planted_date,
-  }));
-
-  function addRow() {
-    const name = picked ? picked.common_name ?? picked.scientific_name : text.trim();
-    if (!name) return;
-    const row: StagedRow = {
-      common_name: name,
-      botanical_name: picked ? picked.scientific_name : null,
-      catalog_id: picked ? picked.id : null,
-      planted_date: date.trim() || null,
-    };
-    setStaged((s) => [...s, row]);
-    setText("");
-    setPicked(null);
-    setDate("");
-    setResults([]);
-  }
-
-  function removeRow(i: number) {
-    setStaged((s) => s.filter((_, idx) => idx !== i));
-  }
-
-  const batchFlags = flagBatchDuplicates(staged);
-  const dupFlags = staged.map(
-    (r, i) => batchFlags[i] || findExistingDuplicate(r, existingEntries),
-  );
-
-  async function save() {
-    if (staged.length === 0) return;
-    setSaving(true);
-    setError(null);
-    const res = await fetch("/api/plants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ zone_id: zoneId, rows: staged }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      setError("Save failed — please try again.");
-      return;
-    }
-    setStaged([]);
-    onSaved();
-  }
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ display: "flex", gap: 6, position: "relative" }}>
-        <input
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setPicked(null);
-          }}
-          placeholder="search the catalog…"
-          aria-label="search the plant catalog"
-          style={{ ...input, flex: 1 }}
-        />
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label="planting date"
-          style={input}
-        />
-        <button
-          type="button"
-          onClick={addRow}
-          style={{ ...input, background: "#e3dac3", cursor: "pointer" }}
-        >
-          + Add row
-        </button>
-      </div>
-
-      {results.length > 0 && (
-        <ul
-          style={{
-            listStyle: "none",
-            margin: "2px 0 0",
-            padding: 4,
-            border: "1px solid #cbb994",
-            borderRadius: 8,
-            background: "#fff",
-            maxHeight: 200,
-            overflowY: "auto",
-          }}
-        >
-          {results.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => choose(r)}
-                style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 8px", cursor: "pointer" }}
-              >
-                <strong>{r.common_name ?? r.scientific_name}</strong>
-                {r.common_name && <em style={{ color: "#8a8268" }}> — {r.scientific_name}</em>}
-              </button>
-            </li>
-          ))}
-          {text.trim().length >= 2 && (
-            <li>
-              <button
-                type="button"
-                onClick={chooseCustom}
-                style={{ width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 8px", cursor: "pointer", color: "#7a6a44" }}
-              >
-                Add “{text.trim()}” as a custom plant
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
-
-      {staged.length > 0 && (
-        <>
-          <ul style={{ marginTop: 8 }}>
-            {staged.map((r, i) => (
-              <li key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <span>
-                  {r.common_name}
-                  {r.botanical_name ? <em style={{ color: "#8a8268" }}> — {r.botanical_name}</em> : null}
-                  {r.planted_date ? <span style={{ color: "#8a8268" }}> · {r.planted_date}</span> : null}
-                  {dupFlags[i] && (
-                    <span style={{ color: "#8e3b5e" }}> · already in this list</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeRow(i)}
-                  aria-label={`Remove ${r.common_name}`}
-                  style={{ border: "none", background: "transparent", color: "#8e3b5e", cursor: "pointer" }}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            style={{ minHeight: 38, padding: "0 12px", borderRadius: 8, border: "1px solid #cbb994", background: "#9bbf4a", cursor: "pointer" }}
-          >
-            {saving ? "Saving…" : `Save ${staged.length} plant${staged.length === 1 ? "" : "s"}`}
-          </button>
-          {error && <p style={{ color: "#8e3b5e", fontSize: 12, margin: "4px 0 0" }}>{error}</p>}
-        </>
-      )}
-    </div>
-  );
-}
+import PlantField from "./PlantField";
 ```
 
-- [ ] **Step 3: Wire it into `ZonePanel`**
-
-In `src/components/ZonePanel.tsx`:
-
-1. Add the import near the other imports at the top:
+Add a `catalogId` state alongside `common`/`botanical` (after line ~35):
 
 ```tsx
-import PlantPicker from "./PlantPicker";
+const [catalogId, setCatalogId] = useState<string | null>(initial?.catalog_id ?? null);
 ```
 
-2. Remove the now-unused `newPlant` state (line ~36: `const [newPlant, setNewPlant] = useState("");`) and the `addPlant` function (lines ~57-69).
+- [ ] **Step 2: Replace the plant-name + botanical-name inputs**
 
-3. Replace the add-plant `<form>` block (the `{unlocked && (<form>…</form>)}` at ~lines 229-248) with:
+Replace the two `<div>` blocks for "Plant name *" and "Botanical name" (lines ~101-108) with:
 
 ```tsx
-{unlocked && (
-  <PlantPicker zoneId={zone.id} existing={plants} onSaved={load} />
-)}
+<div>
+  <label style={label}>Plant name *</label>
+  <PlantField
+    commonName={common}
+    botanicalName={botanical ?? ""}
+    onChange={(v) => {
+      setCommon(v.common_name);
+      setBotanical(v.botanical_name);
+      setCatalogId(v.catalog_id);
+    }}
+  />
+</div>
+<div>
+  <label style={label}>Botanical name</label>
+  <input style={field} value={botanical ?? ""} onChange={(e) => setBotanical(e.target.value)} />
+</div>
 ```
 
-4. Show the planting date in the existing plant list. Change the plant `<li>`'s `<span>` (lines ~216-219) to:
+(The botanical-name input stays editable for custom plants; picking a catalog match fills it automatically.)
 
-```tsx
-<span>
-  {p.common_name}
-  {p.botanical_name ? <em style={{ color: "#8a8268" }}> — {p.botanical_name}</em> : null}
-  {p.planted_date ? <span style={{ color: "#8a8268" }}> · {p.planted_date}</span> : null}
-</span>
-```
+- [ ] **Step 3: Add `catalog_id` to the payload, remove `also_add_to_plant_list`**
 
-- [ ] **Step 4: Typecheck and lint**
+In `submit`, change the `payload` object (lines ~73-86): add `catalog_id: catalogId,` and remove the `also_add_to_plant_list: alsoAdd,` line.
+
+- [ ] **Step 4: Remove the mirror checkbox and its state**
+
+Remove the `alsoAdd` state (line ~44: `const [alsoAdd, setAlsoAdd] = useState(...)`) and the checkbox block (lines ~164-168, the `{!initial && zoneId && (<label>… also add to this zone's plant list …</label>)}`).
+
+- [ ] **Step 5: Typecheck and lint**
 
 Run: `npx tsc --noEmit && npm run lint`
-Expected: PASS. (If `tsc` flags `busy` as unused after removing `addPlant`, also remove the now-orphaned `busy`/`setBusy` usages that only served `addPlant` — but `removePlant` still uses `busy`, so leave it.)
+Expected: PASS (no unused `alsoAdd`/`setAlsoAdd`).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/components/PurchaseForm.tsx
+git commit -m "feat: catalog picker in PurchaseForm; drop plant-list mirror checkbox"
+```
+
+---
+
+### Task 5: Remove the `also_add_to_plant_list` mirror from the purchases API; delete `/api/plants`
+
+**Files:**
+- Modify: `src/app/api/purchases/route.ts`
+- Delete: `src/app/api/plants/route.ts`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: `POST /api/purchases` no longer writes to `plants`; `/api/plants` no longer exists.
+
+- [ ] **Step 1: Remove the mirror block and field**
+
+In `src/app/api/purchases/route.ts`:
+- Delete the block in `POST` that mirrors into `plants` (lines ~51-59, the
+  `if (body.also_add_to_plant_list && fields.zone_id) { … supabase.from("plants").insert(…) }`).
+- Remove `also_add_to_plant_list?: boolean;` from the `PurchaseInput` type (line ~18).
+
+- [ ] **Step 2: Delete the plants route**
+
+```bash
+git rm src/app/api/plants/route.ts
+```
+
+- [ ] **Step 3: Typecheck and lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/app/api/purchases/route.ts
+git commit -m "refactor: remove plants mirror from purchases API and delete /api/plants"
+```
+
+---
+
+### Task 6: Derive "Currently planted" from purchases in `ZonePanel`; remove the add-plant UI
+
+**Files:**
+- Modify: `src/components/ZonePanel.tsx`
+
+**Interfaces:**
+- Consumes: purchases with `status = 'planted'` for the zone (read via `getBrowserSupabase()`).
+- Produces: no `plants` reads/writes anywhere in the component.
+
+- [ ] **Step 1: Remove plant state and queries**
+
+In `src/components/ZonePanel.tsx`:
+- Remove the `Plant` import from `@/lib/types` (keep `Zone`, `Purchase`, `ZonePhoto`).
+- Remove `const [plants, setPlants] = useState<Plant[]>([]);` (line ~33).
+- Remove `const [newPlant, setNewPlant] = useState("");` (line ~36) and `const [busy, setBusy] = useState(false);` if it is only used by the removed plant functions (it is — see Step 4).
+- In `load` (lines ~41-51), remove the `plants` query from the `Promise.all` and the `setPlants(...)` line. Add a query for currently-planted purchases:
+
+```tsx
+const load = useCallback(async () => {
+  const sb = getBrowserSupabase();
+  const [planted, pu, ph] = await Promise.all([
+    sb.from("purchases").select("*").eq("zone_id", zone.id).eq("status", "planted").order("common_name"),
+    sb.from("purchases").select("*").eq("zone_id", zone.id).order("created_at", { ascending: false }).limit(5),
+    sb.from("zone_photos").select("*").eq("zone_id", zone.id),
+  ]);
+  setPlanted((planted.data ?? []) as Purchase[]);
+  setPurchases((pu.data ?? []) as Purchase[]);
+  setPhotos(sortChronological((ph.data ?? []) as ZonePhoto[]));
+}, [zone.id]);
+```
+
+Add the state for it near the other `useState`s:
+
+```tsx
+const [planted, setPlanted] = useState<Purchase[]>([]);
+```
+
+- [ ] **Step 2: Remove the add/remove plant functions**
+
+Delete `addPlant` (lines ~57-69) and `removePlant` (lines ~71-76).
+
+- [ ] **Step 3: Rewrite the "Currently planted" section**
+
+Replace the "Currently planted" heading, list, and add `<form>` (lines ~211-248) with:
+
+```tsx
+<h3 style={{ color: "#7a6a44", marginBottom: 4, marginTop: 16 }}>Currently planted</h3>
+{planted.length === 0 && <p style={{ color: "#8a8268", margin: 0 }}>No plants listed yet.</p>}
+<ul style={{ marginTop: 4 }}>
+  {planted.map((p) => (
+    <li key={p.id}>
+      {p.common_name}
+      {p.botanical_name ? <em style={{ color: "#8a8268" }}> — {p.botanical_name}</em> : null}
+      {p.purchase_date ? <span style={{ color: "#8a8268" }}> · {p.purchase_date}</span> : null}
+    </li>
+  ))}
+</ul>
+```
+
+(Plants now come from purchases; there is no per-plant remove here — lifecycle is managed by editing the purchase's status in the tracker. The "+ Add purchase" link at the bottom of the panel remains the intake.)
+
+- [ ] **Step 4: Confirm no orphaned references**
+
+Search the file for `plants`, `newPlant`, `addPlant`, `removePlant`, `busy` and confirm none remain except intended ones. `busy` was used only by the removed plant form, so remove it and any `disabled={busy}` it fed.
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: PASS (no unused variables, no missing references).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/PlantPicker.tsx src/components/ZonePanel.tsx
-git commit -m "feat: catalog-backed plant picker with batch staging in ZonePanel"
+git add src/components/ZonePanel.tsx
+git commit -m "feat: derive Currently planted from purchases; remove standalone add-plant UI"
 ```
 
 ---
 
-### Task 7: Full verification
+### Task 7: Drop the `plants` table and remove the `Plant` type
+
+**Files:**
+- Create: `supabase/migrations/0004_drop_plants_table.sql`
+- Modify: `src/lib/types.ts`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: no `plants` table; no `Plant` type. (Do this last so earlier tasks that still referenced `Plant` compiled.)
+
+- [ ] **Step 1: Write the migration**
+
+Create `supabase/migrations/0004_drop_plants_table.sql`:
+
+```sql
+-- Purchases are the single intake for plants; a zone's "currently planted"
+-- list is derived from purchases (status = 'planted'). The standalone plants
+-- table is no longer used.
+drop table if exists plants;
+```
+
+- [ ] **Step 2: Remove the `Plant` type**
+
+In `src/lib/types.ts`, delete the entire `Plant` type (lines ~35-42).
+
+- [ ] **Step 3: Typecheck and lint**
+
+Run: `npx tsc --noEmit && npm run lint`
+Expected: PASS — no remaining references to `Plant` (Tasks 4 and 6 removed them).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add supabase/migrations/0004_drop_plants_table.sql src/lib/types.ts
+git commit -m "feat: drop plants table and Plant type"
+```
+
+Note: applying the migration to the live DB (`node scripts/migrate.mjs 0004_drop_plants_table.sql`) is destructive and is run by the maintainer.
+
+---
+
+### Task 8: Full verification
 
 **Files:** none (verification only).
 
@@ -786,7 +607,7 @@ Expected: PASS — all existing tests plus the new `plant-catalog` tests.
 - [ ] **Step 2: Typecheck and lint the whole project**
 
 Run: `npx tsc --noEmit && npm run lint`
-Expected: PASS.
+Expected: PASS. In particular, no file still imports `Plant` or references `/api/plants`.
 
 - [ ] **Step 3: Build**
 
@@ -795,13 +616,13 @@ Expected: build succeeds.
 
 - [ ] **Step 4: Manual smoke (optional, needs env + applied migration)**
 
-With `.env.local` set and migration `0004` applied: `npm run dev`, open a zone in edit mode, search the catalog, stage two plants (one catalog, one custom, give one a date), save, and confirm they appear in "Currently planted." Re-stage an identical entry and confirm the "already in this list" warning appears but Save still works.
+With `.env.local` set and migration `0004` applied: `npm run dev`, add a purchase using the catalog typeahead (pick a match; confirm botanical name auto-fills), save with `status = 'planted'` and a zone, then open that zone and confirm the plant appears under "Currently planted." Change the purchase's status to `died` in the tracker and confirm it disappears from "Currently planted" but remains in the tracker log. Add another purchase with a custom (off-catalog) name via the escape hatch and confirm it saves.
 
 - [ ] **Step 5: Final commit (if any verification fixes were needed)**
 
 ```bash
 git add -A
-git commit -m "chore: verification fixes for plant catalog picker"
+git commit -m "chore: verification fixes for purchase-driven plant intake"
 ```
 
 (If nothing changed in Steps 1-3, skip this commit.)
@@ -810,6 +631,7 @@ git commit -m "chore: verification fixes for plant catalog picker"
 
 ## Self-Review Notes
 
-- **Spec coverage:** data model (Task 1), search endpoint (Task 4) + ranking/sanitizer (Task 2), picker UI with escape hatch + planting date + staging (Task 6), duplicate detection same-species/same-or-blank-date both against existing and within batch (Task 3, surfaced in Task 6), batch insert API with validation + all-or-nothing (Task 5), error handling preserving the staging list (Task 6 `save`), and tests for all `lib/` logic (Tasks 2-3). All spec sections map to a task.
-- **Type consistency:** `CatalogResult`, `PlantEntry`, `StagedRow`, and the `{ inserted, rows }` response shape are used consistently across tasks; `planted_date: string | null` is threaded from Task 1 through 5 and 6.
-- **Out of scope confirmed:** no CSV import, no tracker changes.
+- **Spec coverage:** catalog search endpoint + ranking/sanitizer (Tasks 1-2), catalog picker in PurchaseForm with escape hatch + `catalog_id` (Tasks 3-4), removal of mirror + `/api/plants` (Task 5), "Currently planted" derived from purchases `status='planted'` + removal of standalone add UI (Task 6), drop `plants` table + `Plant` type (Task 7), tests for `lib/` logic (Task 1). All spec sections map to a task.
+- **Ordering:** the `Plant` type is removed only in Task 7, after Tasks 4 and 6 have removed all its consumers, so every intermediate task compiles.
+- **Type consistency:** `CatalogResult` and the `PlantField` `onChange` shape (`{ common_name, botanical_name, catalog_id }`) are used consistently across Tasks 1-4; `Purchase` (already in types) backs the derived list in Task 6.
+- **Out of scope confirmed:** no CSV import, no dedup logic, no new date column (purchase_date is the planting date).

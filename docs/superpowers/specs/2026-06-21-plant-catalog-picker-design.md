@@ -1,58 +1,78 @@
-# Plant Catalog Picker — Design
+# Purchase-Driven Plant Intake + Catalog Picker — Design
 
 **Date:** 2026-06-21
 **Status:** Approved (design); pending implementation plan
 
 ## Problem
 
-Plants are added to a zone's "currently planted" list through a free-text input in
-`ZonePanel`. This produces bad data: typos, invented names, and no link to the
-authoritative `plant_catalog` table (so `catalog_id` and `botanical_name` are always
-left null). We want adding a plant to draw from the existing catalog to keep names
-clean and linked, while still allowing the occasional plant that isn't catalogued.
+Plants currently enter a zone two ways:
 
-Legitimate duplicates exist: the same species can be planted in different years and
-tracked as separate entries (different ages). So the goal is to prevent *accidental*
-duplicates and bad names — not to forbid intentional repeats.
+1. The **purchase intake** (`PurchaseForm`), which optionally mirrors a purchase into
+   the `plants` table via an `also_add_to_plant_list` checkbox.
+2. A **standalone free-text box** in `ZonePanel` that writes straight to the `plants`
+   table with no purchase behind it and no link to the authoritative `plant_catalog`.
+
+Path 2 is the source of bad data: typos, invented names, and rows with no `catalog_id`.
+It also creates a parallel "currently planted" list that drifts out of sync with the
+purchase log and has no lifecycle — a `plants` row is either present or deleted, with no
+record that a plant was bought, planted, and later died.
+
+## Decision
+
+**Purchase is the single intake point.** A plant exists in a zone because it was
+purchased and planted. There is no arbitrary "add a plant" path.
+
+Concretely:
+
+1. **The `plants` table is dropped.** A zone's "Currently planted" list is *derived* from
+   its purchases.
+2. **"Currently planted" = that zone's purchases with `status = 'planted'`.** The purchase
+   `status` field is the plant lifecycle: `pending` (on order, not yet in ground),
+   `planted` (alive in the zone), `replaced`, `died`. A plant that dies becomes a purchase
+   with `status = 'died'` — it leaves the currently-planted view but stays in the tracker
+   log as history.
+3. **`purchase_date` is the planting date.** These are perishable goods planted within ~2
+   days of purchase, so a separate planting date is unnecessary.
+4. **The catalog picker lives in the purchase intake.** `PurchaseForm`'s free-text "Plant
+   name" / "Botanical name" fields become a single catalog-backed typeahead that sets
+   `common_name`, `botanical_name`, and `catalog_id`, with a free-text escape hatch for
+   plants not in the catalog.
+
+Duplicate detection is no longer needed: two plantings of the same species are simply two
+purchase records, naturally distinct.
 
 ## Scope
 
 In scope:
-- Catalog-backed typeahead picker for adding plants to a zone, with a free-text escape
-  hatch for off-catalog plants.
-- Optional planting date per plant entry.
-- Batch staging: build up several plants, then save them in one action.
-- Duplicate detection with a warn-but-allow policy.
+- Catalog search endpoint + ranking/sanitizer logic (testable).
+- Catalog-backed typeahead in `PurchaseForm` with a free-text escape hatch, populating
+  `catalog_id`.
+- Deriving a zone's "Currently planted" list from purchases (`status = 'planted'`).
+- Removing the `plants` table, the `/api/plants` route, the standalone add-plant box in
+  `ZonePanel`, and the `also_add_to_plant_list` mirror.
 
-Out of scope (decided during brainstorming):
-- Bulk CSV import of zone plant lists. The catalog is the reference; plants are added
-  one-at-a-time or in small staged batches, not loaded from external spreadsheets.
-- Changes to the purchases/tracker flow.
+Out of scope:
+- Bulk CSV import of plants (the catalog is the reference; purchases are the intake).
+- Changes to the tracker table/filters beyond what removing `plants` requires (none
+  expected — TrackerTable already reads purchases).
 
 ## Data Model
 
-One new optional column on `plants`:
+Drop the `plants` table:
 
 ```sql
--- supabase/migrations/0004_plant_planted_date.sql
-alter table plants add column if not exists planted_date date;
+-- supabase/migrations/0004_drop_plants_table.sql
+drop table if exists plants;
 ```
 
-`Plant` in `src/lib/types.ts` gains:
+No new columns. `purchases` already has `catalog_id uuid references plant_catalog(id)`,
+`purchase_date date`, and the `status` check constraint
+(`planted`/`pending`/`replaced`/`died`).
 
-```ts
-planted_date: string | null;
-```
+Type changes in `src/lib/types.ts`:
+- Remove the `Plant` type.
 
-`string | null` is the established convention for date columns over the Supabase JSON
-API (cf. `Purchase.purchase_date`, `ZonePhoto.taken_at`). The column is a real Postgres
-`date`; it is serialized as an ISO string.
-
-`catalog_id` and `botanical_name` already exist on `plants`. The picker starts
-populating them when a catalog entry is chosen. Custom (off-catalog) plants keep
-`catalog_id = null` and `botanical_name = null`, but may still have a `planted_date`.
-
-## Search Endpoint
+## Catalog Search Endpoint
 
 New route: `GET /api/plant-catalog?q=<text>` — public read, **not** edit-gated (it only
 reads the catalog, which already has a public-read RLS policy).
@@ -65,8 +85,8 @@ Behavior:
   ```ts
   .or(`common_name.ilike.%${q}%,scientific_name.ilike.%${q}%`)
   ```
-  (The `0001_init.sql` migration already provides lowercased indexes on
-  `common_name` and `scientific_name`, anticipating this search.)
+  (The `0001_init.sql` migration already provides lowercased indexes on `common_name`
+  and `scientific_name`, anticipating this search.)
 - Select only the fields the picker needs: `id, scientific_name, common_name,
   other_common_names`.
 - `.limit(20)`.
@@ -80,98 +100,85 @@ Ranking lives in `src/lib/plant-catalog.ts` as a pure, unit-testable function:
 This mirrors the project's pattern of keeping logic testable in `lib/` (cf.
 `parse-npsot`, `parse-wildflower`, `merge-catalog`).
 
-## Picker UI
+## Catalog Picker in PurchaseForm
 
-A new `PlantPicker` component (separate file, to keep `ZonePanel` from growing). It is
-shown only when edit mode is unlocked, replacing the current free-text add form.
+`PurchaseForm`'s "Plant name *" and "Botanical name" inputs (currently two free-text
+fields backed by `common`/`botanical` state) are replaced by a catalog typeahead:
 
-Row builder:
-- Text input with a debounced (~250ms, 2+ chars) typeahead hitting
+- A text input with a debounced (~250ms, 2+ chars) typeahead hitting
   `/api/plant-catalog?q=`. The dropdown shows the common name (bold) and botanical name
   (italic) for each match.
-- **Pick a match** → captures `catalog_id` + `botanical_name` from that row; the chosen
-  common name displays as a confirmed chip so the user knows it is catalog-linked.
-- **No match / want custom** → a trailing "Add '<your text>' as a custom plant" option →
-  `catalog_id = null`, free-text `common_name`, no botanical name.
-- An optional **planting date** input (`<input type="date">`, may be left blank).
-- **"+ Add row"** drops the current selection into a staging list and clears the input.
+- **Pick a match** → sets the form's `common_name` + `botanical_name` from that row and
+  captures `catalog_id`.
+- **No match / want custom** → a trailing "Use '<your text>' as a custom plant" option →
+  `catalog_id = null`, free-text `common_name`, optional free-text botanical name.
+- When editing an existing purchase, the field pre-fills from the purchase's
+  `common_name`; `catalog_id` is preserved if already set.
 
-Staging list:
-- Shows each staged row: common name, botanical name (if any), planting date (if any),
-  and an "×" to remove it.
-- Rows flagged as duplicates (see below) show a warning marker.
-- A **"Save N plants"** button commits the whole batch.
+The picker is encapsulated in a reusable `PlantField` component so `PurchaseForm` stays
+focused. The rest of `PurchaseForm` (zone, vendor, date, price, qty, status, notes) is
+unchanged except for removing the `also_add_to_plant_list` checkbox.
 
-Single-add still works for the one-off case (a staging list of one).
+`catalog_id` is added to `PurchaseForm`'s submit payload. The `POST`/`PATCH`
+`/api/purchases` route already accepts and persists `catalog_id` (see
+`cleanFields`), so no API change is needed for that.
 
-## Duplicate Detection
+## Purchases API Changes
 
-Policy: **warn only when the entry is truly identical** — same species *and*
-same-or-blank planting date. Legitimate duplicates (same species, different dates) are
-allowed silently.
+`src/app/api/purchases/route.ts`:
+- Remove the `also_add_to_plant_list` mirror block from `POST` (the `plants` insert).
+- Remove `also_add_to_plant_list` from the `PurchaseInput` type.
+- Everything else (including `catalog_id` handling) stays.
 
-Definitions:
-- **Same species:** same `catalog_id` when catalog-linked; for custom plants,
-  case-insensitive `common_name` match.
-- **Same/blank date:** both `planted_date` values equal, or both blank.
+Delete `src/app/api/plants/route.ts` entirely.
 
-Two checks run at save time, both implemented as pure functions in
-`src/lib/plant-catalog.ts`:
-1. **Against the zone's existing `plants`** — a staged row matching an existing entry on
-   species + same/blank date is flagged.
-2. **Within the staging list** — two staged rows matching each other on species +
-   same/blank date are flagged.
+## ZonePanel Changes
 
-Flagged rows display a warning (e.g. *"Gregg's Mistflower (no date) is already in this
-list. Add anyway?"*). The user can **Save anyway** or remove the flagged rows. Nothing is
-blocked outright.
+`src/components/ZonePanel.tsx`:
+- Remove the `plants` state, its load query, the standalone add-plant `<form>`, the
+  `addPlant`/`removePlant` functions, and the `newPlant` state.
+- Replace the "Currently planted" section so it derives from purchases: query the zone's
+  purchases with `status = 'planted'` and render their `common_name` / `botanical_name`.
+  This can reuse the existing purchases load (raise its limit or add a dedicated
+  `status = 'planted'` query) rather than a second table.
+- Keep the "Recent purchases" and photo sections as-is.
 
-## Batch Insert API
+## Error Handling
 
-`POST /api/plants` gains array support while preserving the existing single-add shape for
-backward compatibility:
-
-- Accepts either:
-  - `{ zone_id, common_name, botanical_name?, catalog_id?, planted_date? }` (current
-    shape), or
-  - `{ zone_id, rows: [{ common_name, botanical_name?, catalog_id?, planted_date? }, ...] }`.
-- Edit-gated via `requireEdit`, as today.
-- Validates each row: `common_name` required and trimmed non-empty; `catalog_id`, if
-  present, must be a valid uuid; `planted_date`, if present, must parse as a date.
-- Inserts the valid batch in a single `supabase.from("plants").insert([...])` call.
-- All-or-nothing: on DB error, return `{ error, inserted: 0 }` so the UI state stays
-  truthful (no partial-insert ambiguity).
-- On success, return `{ inserted: N, rows: [...] }` so the panel can update its list
-  without a full reload.
-
-## Error Handling (Client)
-
-- Network / 500 error → inline error message in the panel; the staging list is preserved
-  so the user loses nothing.
-- Per-row validation failure from the server → mark the offending rows; keep the rest
-  staged.
+- Catalog search fetch failure in the picker → the dropdown simply shows no matches; the
+  user can still use the free-text escape hatch. No blocking error.
+- Purchase save errors are handled by the existing `PurchaseForm` error path (unchanged).
 
 ## Testing
 
 Unit tests (vitest, matching existing style under `tests/`):
 - `src/lib/plant-catalog.ts`:
   - search ranking (prefix > substring > alphabetical),
-  - the `q` sanitizer,
-  - duplicate detection against an existing list,
-  - duplicate detection within a staging batch.
+  - the `q` sanitizer.
 
-The API route and React component stay thin and follow the project's existing convention
-of not being directly unit-tested (cf. the current `plants` and `purchases/import`
+The API route and React components stay thin and follow the project's existing convention
+of not being directly unit-tested (cf. the current `purchases` and `purchases/import`
 routes), with all decision logic pulled into `lib/`.
 
 ## Files Touched
 
-- `supabase/migrations/0004_plant_planted_date.sql` — new migration.
-- `src/lib/types.ts` — add `planted_date` to `Plant`.
-- `src/lib/plant-catalog.ts` — new: search ranking, `q` sanitizer, dedup functions.
+- `supabase/migrations/0004_drop_plants_table.sql` — new migration (drops `plants`).
+- `src/lib/types.ts` — remove the `Plant` type.
+- `src/lib/plant-catalog.ts` — new: `CatalogResult` type, `sanitizeQuery`,
+  `rankCatalogResults`.
 - `src/app/api/plant-catalog/route.ts` — new: search endpoint.
-- `src/app/api/plants/route.ts` — add batch (array) support to `POST`.
-- `src/components/PlantPicker.tsx` — new: typeahead + staging list.
-- `src/components/ZonePanel.tsx` — swap the free-text add form for `PlantPicker`; render
-  `planted_date` in the plant list.
+- `src/app/api/plants/route.ts` — delete.
+- `src/app/api/purchases/route.ts` — remove the `also_add_to_plant_list` mirror and field.
+- `src/components/PlantField.tsx` — new: catalog typeahead field.
+- `src/components/PurchaseForm.tsx` — use `PlantField`, add `catalog_id` to payload,
+  remove the `also_add_to_plant_list` checkbox.
+- `src/components/ZonePanel.tsx` — derive "Currently planted" from purchases; remove the
+  standalone add-plant UI and `plants` queries.
 - `tests/plant-catalog.test.ts` — new: unit tests for the `lib/` logic.
+
+## Migration / Data Note
+
+Dropping `plants` is destructive. Any existing `plants` rows that were created via the old
+standalone box (not backed by a purchase) will no longer appear, by design. Rows that were
+mirrored from purchases are already represented by their purchase records. The maintainer
+applies the migration deliberately (`node scripts/migrate.mjs 0004_drop_plants_table.sql`).
