@@ -93,17 +93,6 @@ export default function BaseMap() {
 
       {/* Wood fence (SE exterior) */}
       <path d="M745,665 L905,690" fill="none" stroke="#a9895f" strokeWidth={3} strokeDasharray="8 5" />
-
-      {/* Street labels */}
-      <text x="60" y="520" fontSize={32} fill="#7a6a44" transform="rotate(-82 60 520)" fontFamily={hand}>
-        Eastview Cir
-      </text>
-      <text x="430" y="958" fontSize={32} fill="#7a6a44" fontFamily={hand}>
-        Baltimore Drive
-      </text>
-      <text x="940" y="500" fontSize={22} fill="#9c8567" transform="rotate(90 940 500)" fontFamily={hand}>
-        alley
-      </text>
     </g>
   );
 }
