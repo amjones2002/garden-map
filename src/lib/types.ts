@@ -27,6 +27,7 @@ export type MapLabel = {
   y: number; // normalized 0..1
   font_size: number;
   color: string | null;
+  rotation: number; // degrees
   created_at: string;
   updated_at: string;
   archived_at: string | null;
