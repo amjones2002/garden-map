@@ -17,6 +17,8 @@ export default function LabelEditor() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editColor, setEditColor] = useState("#3a3324");
+  const [editRotation, setEditRotation] = useState(0);
+  const [editFontSize, setEditFontSize] = useState(30);
   const [msg, setMsg] = useState<string | null>(null);
   const movedRef = useRef(false);
 
@@ -68,6 +70,8 @@ export default function LabelEditor() {
     setSelectedId(l.id);
     setEditText(l.text);
     setEditColor(l.color ?? "#3a3324");
+    setEditRotation(l.rotation ?? 0);
+    setEditFontSize(l.font_size);
     movedRef.current = false;
   }
 
@@ -97,7 +101,13 @@ export default function LabelEditor() {
     await fetch("/api/map-labels", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selectedId, text: editText.trim() || undefined, color: editColor }),
+      body: JSON.stringify({
+        id: selectedId,
+        text: editText.trim() || undefined,
+        color: editColor,
+        rotation: editRotation,
+        font_size: editFontSize,
+      }),
     });
     setMsg("Saved.");
     load();
@@ -124,6 +134,8 @@ export default function LabelEditor() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8, alignItems: "center" }}>
           <input style={{ ...ctrl, cursor: "text" }} value={editText} onChange={(e) => setEditText(e.target.value)} placeholder="label text" aria-label="label text" />
           <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} aria-label="label color" style={{ width: 44, height: 38, border: "1px solid #cbb994", borderRadius: 8, background: "#f5efe0" }} />
+          <input type="number" value={editRotation} onChange={(e) => setEditRotation(Number(e.target.value))} aria-label="label rotation degrees" title="rotation (degrees)" style={{ ...ctrl, cursor: "text", width: 90 }} />
+          <input type="number" value={editFontSize} onChange={(e) => setEditFontSize(Number(e.target.value))} aria-label="label font size" title="font size" style={{ ...ctrl, cursor: "text", width: 90 }} />
           <button style={{ ...ctrl, background: "#9bbf4a", fontWeight: 600 }} onClick={saveSelected}>Save text</button>
           <button style={{ ...ctrl, color: "#8e3b5e" }} onClick={() => del(selected.id)}>Delete</button>
         </div>
@@ -161,6 +173,7 @@ export default function LabelEditor() {
             <text
               x={l.x * SIZE}
               y={l.y * SIZE}
+              transform={l.rotation ? `rotate(${l.rotation} ${l.x * SIZE} ${l.y * SIZE})` : undefined}
               fontSize={l.font_size}
               textAnchor="middle"
               dominantBaseline="middle"
