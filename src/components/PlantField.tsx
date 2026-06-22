@@ -29,7 +29,6 @@ export default function PlantField({
     const q = commonName.trim();
     debounce.current = setTimeout(async () => {
       if (!open || q.length < 2) {
-        setResults([]);
         return;
       }
       try {
@@ -75,7 +74,7 @@ export default function PlantField({
         onFocus={() => setOpen(true)}
         required
       />
-      {open && results.length > 0 && (
+      {open && commonName.trim().length >= 2 && results.length > 0 && (
         <ul
           style={{
             listStyle: "none",
