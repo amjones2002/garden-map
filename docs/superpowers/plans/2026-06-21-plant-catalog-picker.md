@@ -59,10 +59,10 @@ describe("sanitizeQuery", () => {
 describe("rankCatalogResults", () => {
   it("ranks prefix matches above substring-only matches", () => {
     const rows = [
-      mk("1", "Cardinal Flower", "Lobelia cardinalis"), // substring 'card'
-      mk("2", "Cardplant", "Aaa bbb"), // prefix 'card'
+      mk("1", "Pineapple Sage", "Salvia elegans"), // 'sage' is a substring, not a prefix
+      mk("2", "Sagebrush", "Artemisia tridentata"), // 'sage' is a prefix
     ];
-    const out = rankCatalogResults(rows, "card");
+    const out = rankCatalogResults(rows, "sage");
     expect(out.map((r) => r.id)).toEqual(["2", "1"]);
   });
 
