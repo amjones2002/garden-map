@@ -36,6 +36,7 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
   const [photos, setPhotos] = useState<ZonePhoto[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ total: number; done: number } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<ZonePhoto | null>(null);
 
   const load = useCallback(async () => {
     const sb = getBrowserSupabase();
@@ -131,18 +132,18 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
         {photos.length > 0 && (
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
             {photos.map((ph) => (
-              <figure key={ph.id} style={{ margin: 0, flex: "0 0 auto", width: 140 }}>
+              <figure key={ph.id} style={{ margin: 0, flex: "0 0 auto", width: 140, cursor: "pointer" }} onClick={() => setLightboxPhoto(ph)}>
                 <Image
                   src={publicPhotoUrl(SUPABASE_URL, ph.storage_path)}
                   alt={ph.caption ?? `${zone.name} photo`}
                   width={140}
                   height={105}
-                  style={{ objectFit: "cover", borderRadius: 8, border: "1px solid #cbb994" }}
+                  style={{ objectFit: "cover", borderRadius: 8, border: "1px solid #cbb994", display: "block" }}
                 />
                 <figcaption style={{ fontSize: 11, color: "#8a8268", display: "flex", justifyContent: "space-between", gap: 4 }}>
                   <span>{fmtDate(ph)}</span>
                   {unlocked && (
-                    <button onClick={() => removePhoto(ph.id)} style={{ border: "none", background: "transparent", color: "#8e3b5e", cursor: "pointer", fontSize: 11 }}>
+                    <button onClick={(e) => { e.stopPropagation(); removePhoto(ph.id); }} style={{ border: "none", background: "transparent", color: "#8e3b5e", cursor: "pointer", fontSize: 11 }}>
                       delete
                     </button>
                   )}
@@ -218,6 +219,27 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
           + Add purchase
         </Link>
       </div>
+      {lightboxPhoto && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={publicPhotoUrl(SUPABASE_URL, lightboxPhoto.storage_path)}
+            alt={lightboxPhoto.caption ?? ""}
+            style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8 }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxPhoto(null)}
+            aria-label="Close photo"
+            style={{ position: "absolute", top: 16, right: 16, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", fontSize: 24, lineHeight: 1, cursor: "pointer", borderRadius: 4, width: 40, height: 40 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }
