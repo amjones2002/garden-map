@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { useEditMode } from "@/lib/edit-mode";
@@ -131,11 +132,12 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
             {photos.map((ph) => (
               <figure key={ph.id} style={{ margin: 0, flex: "0 0 auto", width: 140 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={publicPhotoUrl(SUPABASE_URL, ph.storage_path)}
                   alt={ph.caption ?? `${zone.name} photo`}
-                  style={{ width: 140, height: 105, objectFit: "cover", borderRadius: 8, border: "1px solid #cbb994" }}
+                  width={140}
+                  height={105}
+                  style={{ objectFit: "cover", borderRadius: 8, border: "1px solid #cbb994" }}
                 />
                 <figcaption style={{ fontSize: 11, color: "#8a8268", display: "flex", justifyContent: "space-between", gap: 4 }}>
                   <span>{fmtDate(ph)}</span>
