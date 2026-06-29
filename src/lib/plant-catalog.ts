@@ -3,6 +3,10 @@ export type CatalogResult = {
   scientific_name: string;
   common_name: string | null;
   other_common_names: string | null;
+  /** Present only on USDA fallback results — not in the local plant_catalog table. */
+  family?: string | null;
+  /** "usda" when sourced from the USDA PLANTS fallback; absent for catalog results. */
+  source?: "usda";
 };
 
 /** Strip whitespace and characters that break Supabase's `.or()` filter builder. */

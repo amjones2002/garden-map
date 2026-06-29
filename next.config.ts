@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/plant-catalog": ["./src/data/usda-index.json"],
+  },
   images: {
     remotePatterns: [
       {

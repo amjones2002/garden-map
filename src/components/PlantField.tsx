@@ -48,7 +48,8 @@ export default function PlantField({
     onChange({
       common_name: r.common_name ?? r.scientific_name,
       botanical_name: r.scientific_name,
-      catalog_id: r.id,
+      // USDA fallback results are not in the local catalog — no catalog_id
+      catalog_id: r.source === "usda" ? null : r.id,
     });
     setResults([]);
     setOpen(false);
@@ -99,6 +100,11 @@ export default function PlantField({
               >
                 <strong>{r.common_name ?? r.scientific_name}</strong>
                 {r.common_name && <em style={{ color: "#8a8268" }}> — {r.scientific_name}</em>}
+                {r.source === "usda" && (
+                  <span style={{ marginLeft: 6, fontSize: "0.75em", color: "#aaa", fontStyle: "normal" }}>
+                    {r.family ?? "USDA"}
+                  </span>
+                )}
               </button>
             </li>
           ))}
