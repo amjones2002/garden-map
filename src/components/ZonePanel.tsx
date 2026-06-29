@@ -7,6 +7,18 @@ import { useEditMode } from "@/lib/edit-mode";
 import type { Zone, Purchase, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl, sortChronological } from "@/lib/photos";
 
+async function getExifDateTaken(file: File): Promise<string | null> {
+  try {
+    const exifr = await import("exifr");
+    const result = await exifr.parse(file, ["DateTimeOriginal", "CreateDate"]);
+    const d: unknown = result?.DateTimeOriginal ?? result?.CreateDate;
+    if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
+  } catch {
+    // EXIF not available or parse error — fall through
+  }
+  return file.lastModified ? new Date(file.lastModified).toISOString() : null;
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 const overlay: React.CSSProperties = {
@@ -81,7 +93,7 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
             body: JSON.stringify({
               zone_id: zone.id,
               storage_path: path,
-              taken_at: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+              taken_at: await getExifDateTaken(file),
             }),
           });
           if (!confirmRes.ok) throw new Error(await confirmRes.text());
