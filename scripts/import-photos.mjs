@@ -71,7 +71,11 @@ async function submit(flags) {
   const files = (await walkImages(flags.dir)).slice(0, flags.limit);
   const manifest = {};
   const batchIds = [];
-  let chunk = [], chunkBytes = 0, total = 0;
+  let chunk = [], chunkBytes = 0, total = 0, skipped = 0;
+
+  // Persist the manifest (all entries so far + submitted batch ids) so a crash
+  // can never orphan already-submitted batches.
+  const persist = () => writeFile(MANIFEST, JSON.stringify({ batchIds, manifest }, null, 2));
 
   // Submit each batch as its chunk fills, so peak memory is one chunk of
   // base64 images — accumulating all 3k+ would exhaust the heap.
@@ -79,6 +83,7 @@ async function submit(flags) {
     if (!chunk.length) return;
     const batch = await anthropic.messages.batches.create({ requests: chunk });
     batchIds.push(batch.id);
+    await persist();
     console.log(`Submitted batch ${batch.id} (${chunk.length} requests).`);
     chunk = [];
     chunkBytes = 0;
@@ -88,35 +93,72 @@ async function submit(flags) {
     const sourceRef = sourceRefFor(flags.dir, file);
     if (done.has(sourceRef)) { console.log(`skip (already imported): ${sourceRef}`); continue; }
 
-    const buffer = await readFile(file);
-    const { date, source } = await extractCaptureDate(file, buffer);
-    const displayBuf = await downscale(buffer, { maxEdge: STORE_MAX_EDGE, quality: STORE_QUALITY });
-    const apiBuf = await downscale(buffer, { maxEdge: API_MAX_EDGE, quality: API_QUALITY });
+    try {
+      const buffer = await readFile(file);
+      const { date, source } = await extractCaptureDate(file, buffer);
+      const displayBuf = await downscale(buffer, { maxEdge: STORE_MAX_EDGE, quality: STORE_QUALITY });
+      const apiBuf = await downscale(buffer, { maxEdge: API_MAX_EDGE, quality: API_QUALITY });
 
-    const key = crypto.createHash("sha1").update(sourceRef).digest("hex");
-    const displayPath = join(DISPLAY_DIR, `${key}.jpg`);
-    await writeFile(displayPath, displayBuf);
+      const key = crypto.createHash("sha1").update(sourceRef).digest("hex");
+      const displayPath = join(DISPLAY_DIR, `${key}.jpg`);
+      await writeFile(displayPath, displayBuf);
 
-    const customId = key.slice(0, 64);
-    manifest[customId] = { sourceRef, captureDate: date.toISOString(), captureSource: source, displayPath };
+      const customId = key.slice(0, 64);
+      manifest[customId] = { sourceRef, captureDate: date.toISOString(), captureSource: source, displayPath };
 
-    const req = buildBatchRequest({ customId, systemPrompt, schema, base64Image: apiBuf.toString("base64"), mediaType: "image/jpeg" });
-    const bytes = Buffer.byteLength(JSON.stringify(req));
-    if (chunk.length && (chunkBytes + bytes > MAX_BATCH_BYTES || chunk.length >= MAX_BATCH_REQUESTS)) {
-      await flushChunk();
+      const req = buildBatchRequest({ customId, systemPrompt, schema, base64Image: apiBuf.toString("base64"), mediaType: "image/jpeg" });
+      const bytes = Buffer.byteLength(JSON.stringify(req));
+      if (chunk.length && (chunkBytes + bytes > MAX_BATCH_BYTES || chunk.length >= MAX_BATCH_REQUESTS)) {
+        await flushChunk();
+      }
+      chunk.push(req);
+      chunkBytes += bytes;
+      total++;
+      if (total % 100 === 0) console.log(`prepared ${total} photos...`);
+    } catch (e) {
+      skipped++;
+      console.warn(`SKIP (unreadable image): ${sourceRef} — ${e.message}`);
     }
-    chunk.push(req);
-    chunkBytes += bytes;
-    total++;
-    if (total % 100 === 0) console.log(`prepared ${total} photos...`);
   }
 
   await flushChunk();
+  await persist();
   if (total === 0) { console.log("Nothing new to submit."); return; }
 
-  await writeFile(MANIFEST, JSON.stringify({ batchIds, manifest }, null, 2));
-  console.log(`Submitted ${total} requests across ${batchIds.length} batch(es).`);
+  console.log(`Submitted ${total} requests across ${batchIds.length} batch(es). Skipped ${skipped} unreadable image(s).`);
   console.log(`Run: npm run import:photos -- collect${flags.dryRun ? " --dry-run" : ""}`);
+}
+
+// ---- REBUILD (recovery) ---------------------------------------------------
+// Reconstruct the manifest deterministically (custom_id = sha1(sourceRef)) and
+// point it at every batch in the account, so a crashed submit's already-paid
+// results can still be collected. Reads no images beyond EXIF; downscales none.
+async function rebuild(flags) {
+  if (!flags.dir) { console.error("rebuild requires --dir <folder>"); process.exit(1); }
+  const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
+
+  const batchIds = [];
+  for await (const b of anthropic.messages.batches.list({ limit: 100 })) batchIds.push(b.id);
+
+  const files = await walkImages(flags.dir);
+  const manifest = {};
+  let n = 0, skipped = 0;
+  for (const file of files) {
+    const sourceRef = sourceRefFor(flags.dir, file);
+    try {
+      const buffer = await readFile(file);
+      const { date, source } = await extractCaptureDate(file, buffer);
+      const key = crypto.createHash("sha1").update(sourceRef).digest("hex");
+      manifest[key.slice(0, 64)] = { sourceRef, captureDate: date.toISOString(), captureSource: source, displayPath: join(DISPLAY_DIR, `${key}.jpg`) };
+      if (++n % 500 === 0) console.log(`rebuilt ${n}...`);
+    } catch (e) {
+      skipped++;
+      console.warn(`SKIP (unreadable image): ${sourceRef} — ${e.message}`);
+    }
+  }
+  await mkdir(CACHE_DIR, { recursive: true });
+  await writeFile(MANIFEST, JSON.stringify({ batchIds, manifest }, null, 2));
+  console.log(`Rebuilt manifest: ${n} entries, ${skipped} skipped, over ${batchIds.length} batch(es).`);
 }
 
 // ---- COLLECT --------------------------------------------------------------
@@ -196,4 +238,5 @@ const flags = parseFlags(process.argv.slice(3));
 const cmd = process.argv[2];
 if (cmd === "submit") submit(flags).catch((e) => { console.error(e); process.exit(1); });
 else if (cmd === "collect") collect(flags).catch((e) => { console.error(e); process.exit(1); });
-else { console.error("Usage: npm run import:photos -- <submit|collect> [--dir <folder>] [--limit N] [--threshold 0.7] [--dry-run]"); process.exit(1); }
+else if (cmd === "rebuild") rebuild(flags).catch((e) => { console.error(e); process.exit(1); });
+else { console.error("Usage: npm run import:photos -- <submit|collect|rebuild> [--dir <folder>] [--limit N] [--threshold 0.7] [--dry-run]"); process.exit(1); }
