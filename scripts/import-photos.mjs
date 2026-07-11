@@ -183,6 +183,7 @@ async function collect(flags) {
     }
 
     for await (const result of await anthropic.messages.batches.results(batchId)) {
+    try {
     const entry = manifest[result.custom_id];
     if (!entry) continue;
     if (result.result.type !== "succeeded") {
@@ -223,6 +224,11 @@ async function collect(flags) {
       counts.errored++; continue;
     }
     counts.inserted++;
+    if (counts.inserted % 200 === 0) console.log(`imported ${counts.inserted}...`);
+    } catch (e) {
+      counts.errored++;
+      console.warn(`result error: ${result.custom_id} — ${e.message}`);
+    }
     }
   }
 
