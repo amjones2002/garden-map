@@ -10,12 +10,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:catalog": "node scripts/seed-catalog.mjs",
-    "seed:zones": "node scripts/seed-zones.mjs"
+    "seed:zones": "node scripts/seed-zones.mjs",
+    "import:photos": "node scripts/import-photos.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@supabase/supabase-js": "^2.108.2",
     "csv-parse": "^7.0.0",
     "dotenv": "^17.4.2",
+    "exifr": "^7.1.3",
     "next": "16.2.9",
     "node-html-parser": "^8.0.1",
     "pg": "^8.22.0",

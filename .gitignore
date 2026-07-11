@@ -43,3 +43,6 @@ survey-page-1.png
 public/survey-page-1.png
 *.pdf
 *.PDF
+
+# Local downscale cache + batch manifest for the photo import script
+.import-cache/
