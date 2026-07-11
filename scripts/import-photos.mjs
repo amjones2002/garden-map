@@ -63,9 +63,19 @@ async function submit(flags) {
   const systemPrompt = buildSystemPrompt(zones);
   const schema = buildClassificationSchema(zones.map((z) => z.slug));
 
-  // Skip already-imported source_refs (idempotent re-runs).
-  const { data: existing } = await supabase.from("zone_photos").select("source_ref").not("source_ref", "is", null);
-  const done = new Set((existing ?? []).map((r) => r.source_ref));
+  // Skip already-imported source_refs (idempotent re-runs). PostgREST caps a
+  // response at 1000 rows, so page through every ref — otherwise a large prior
+  // import looks "undone" and gets re-submitted (and re-billed).
+  const done = new Set();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("zone_photos").select("source_ref")
+      .not("source_ref", "is", null)
+      .range(from, from + 999);
+    if (error) throw error;
+    for (const r of data) done.add(r.source_ref);
+    if (data.length < 1000) break;
+  }
 
   await mkdir(DISPLAY_DIR, { recursive: true });
   const files = (await walkImages(flags.dir)).slice(0, flags.limit);
