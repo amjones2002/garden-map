@@ -799,6 +799,24 @@ const DISPLAY_DIR = join(CACHE_DIR, "display");
 const MANIFEST = join(CACHE_DIR, "manifest.json");
 const API_MAX_EDGE = 1568, API_QUALITY = 80;
 const STORE_MAX_EDGE = 1280, STORE_QUALITY = 75;
+// Batches API caps a batch at 256 MB / 100k requests. Chunk well under that.
+const MAX_BATCH_BYTES = 180 * 1024 * 1024;
+const MAX_BATCH_REQUESTS = 1000;
+
+/** Greedily pack requests into batches bounded by byte size and count. */
+function chunkRequests(requests) {
+  const chunks = [];
+  let cur = [], curBytes = 0;
+  for (const req of requests) {
+    const bytes = Buffer.byteLength(JSON.stringify(req));
+    if (cur.length && (curBytes + bytes > MAX_BATCH_BYTES || cur.length >= MAX_BATCH_REQUESTS)) {
+      chunks.push(cur); cur = []; curBytes = 0;
+    }
+    cur.push(req); curBytes += bytes;
+  }
+  if (cur.length) chunks.push(cur);
+  return chunks;
+}
 
 function parseFlags(argv) {
   const flags = { dir: null, limit: Infinity, threshold: THRESHOLD_DEFAULT, dryRun: false };
@@ -866,33 +884,40 @@ async function submit(flags) {
 
   if (requests.length === 0) { console.log("Nothing new to submit."); return; }
 
-  const batch = await anthropic.messages.batches.create({ requests });
-  await writeFile(MANIFEST, JSON.stringify({ batchId: batch.id, manifest }, null, 2));
-  console.log(`Submitted batch ${batch.id} with ${requests.length} requests.`);
+  const chunks = chunkRequests(requests);
+  const batchIds = [];
+  for (const chunk of chunks) {
+    const batch = await anthropic.messages.batches.create({ requests: chunk });
+    batchIds.push(batch.id);
+    console.log(`Submitted batch ${batch.id} (${chunk.length} requests).`);
+  }
+  await writeFile(MANIFEST, JSON.stringify({ batchIds, manifest }, null, 2));
+  console.log(`Submitted ${requests.length} requests across ${batchIds.length} batch(es).`);
   console.log(`Run: npm run import:photos -- collect${flags.dryRun ? " --dry-run" : ""}`);
 }
 
 // ---- COLLECT --------------------------------------------------------------
 async function collect(flags) {
   if (!existsSync(MANIFEST)) { console.error(`No ${MANIFEST}; run submit first.`); process.exit(1); }
-  const { batchId, manifest } = JSON.parse(await readFile(MANIFEST, "utf8"));
+  const { batchIds, manifest } = JSON.parse(await readFile(MANIFEST, "utf8"));
   const supabase = createClient(requireEnv("NEXT_PUBLIC_SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
   const anthropic = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
-
-  // Poll until the batch ends.
-  let batch = await anthropic.messages.batches.retrieve(batchId);
-  while (batch.processing_status !== "ended") {
-    console.log(`batch ${batchId}: ${batch.processing_status} (${batch.request_counts.processing} processing)`);
-    await new Promise((r) => setTimeout(r, 30000));
-    batch = await anthropic.messages.batches.retrieve(batchId);
-  }
 
   const zones = await fetchZones(supabase);
   const slugToId = new Map(zones.map((z) => [z.slug, z.id]));
   const csvRows = [["source_ref", "area", "zone_slug", "confidence", "review_status", "is_yard", "caption"]];
   const counts = { inserted: 0, skipped: 0, errored: 0, pending: 0 };
 
-  for await (const result of await anthropic.messages.batches.results(batchId)) {
+  for (const batchId of batchIds) {
+    // Poll this batch until it ends.
+    let batch = await anthropic.messages.batches.retrieve(batchId);
+    while (batch.processing_status !== "ended") {
+      console.log(`batch ${batchId}: ${batch.processing_status} (${batch.request_counts.processing} processing)`);
+      await new Promise((r) => setTimeout(r, 30000));
+      batch = await anthropic.messages.batches.retrieve(batchId);
+    }
+
+    for await (const result of await anthropic.messages.batches.results(batchId)) {
     const entry = manifest[result.custom_id];
     if (!entry) continue;
     if (result.result.type !== "succeeded") {
@@ -933,6 +958,7 @@ async function collect(flags) {
       counts.errored++; continue;
     }
     counts.inserted++;
+    }
   }
 
   if (flags.dryRun) {
