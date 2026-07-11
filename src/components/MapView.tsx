@@ -15,18 +15,33 @@ export default function MapView() {
 
   useEffect(() => {
     const sb = getBrowserSupabase();
-    sb.from("zones")
-      .select("*")
-      .is("archived_at", null)
-      .order("sort_order")
-      .then(({ data, error }) => {
+
+    (async () => {
+      try {
+        const { data, error } = await sb
+          .from("zones")
+          .select("*")
+          .is("archived_at", null)
+          .order("sort_order");
         if (error) setError(error.message);
         else setZones((data ?? []) as Zone[]);
-      });
-    sb.from("map_labels")
-      .select("*")
-      .is("archived_at", null)
-      .then(({ data }) => setLabels((data ?? []) as MapLabel[]));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+
+    (async () => {
+      try {
+        const { data, error } = await sb
+          .from("map_labels")
+          .select("*")
+          .is("archived_at", null);
+        if (error) setError((prev) => prev ?? error.message);
+        else setLabels((data ?? []) as MapLabel[]);
+      } catch (err) {
+        setError((prev) => prev ?? (err instanceof Error ? err.message : String(err)));
+      }
+    })();
   }, []);
 
   return (
