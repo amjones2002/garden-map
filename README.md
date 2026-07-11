@@ -72,3 +72,26 @@ is covered by unit tests; the app shell has a component test.
 - **NPSOT** native plant table (sanctioned CSV export) — primary catalog.
 - **WildflowersOrg** ecoregion lists — ecoregion tagging (Richardson straddles
   Texas Blackland Prairies and Cross Timbers).
+
+## Historical photo import
+
+Classify a local export folder of yard photos with Claude Vision and import
+downscaled copies into `zone_photos`. Requires `ANTHROPIC_API_KEY` in `.env.local`
+and migration `0005` applied.
+
+```bash
+# 1. Submit the batch (downscales locally, uploads nothing yet):
+npm run import:photos -- submit --dir "/path/to/photos" --limit 5
+
+# 2. Dry run: poll the batch, print proposed classifications to
+#    .import-cache/dry-run.csv (no DB/storage writes). Tune --threshold, then:
+npm run import:photos -- collect --dry-run
+
+# 3. Real import: uploads display copies + inserts rows.
+npm run import:photos -- collect
+```
+
+High-confidence zone matches import as `review_status='confirmed'`; low-confidence
+or area-only results land as `pending` for later review. Re-running skips photos
+already imported (by `source_ref`). Your local folder is the archival master —
+Supabase stores only the ~180 KB display copies.
