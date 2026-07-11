@@ -27,21 +27,6 @@ const STORE_MAX_EDGE = 1280, STORE_QUALITY = 75;
 const MAX_BATCH_BYTES = 180 * 1024 * 1024;
 const MAX_BATCH_REQUESTS = 1000;
 
-/** Greedily pack requests into batches bounded by byte size and count. */
-function chunkRequests(requests) {
-  const chunks = [];
-  let cur = [], curBytes = 0;
-  for (const req of requests) {
-    const bytes = Buffer.byteLength(JSON.stringify(req));
-    if (cur.length && (curBytes + bytes > MAX_BATCH_BYTES || cur.length >= MAX_BATCH_REQUESTS)) {
-      chunks.push(cur); cur = []; curBytes = 0;
-    }
-    cur.push(req); curBytes += bytes;
-  }
-  if (cur.length) chunks.push(cur);
-  return chunks;
-}
-
 function parseFlags(argv) {
   const flags = { dir: null, limit: Infinity, threshold: THRESHOLD_DEFAULT, dryRun: false };
   for (let i = 0; i < argv.length; i++) {
@@ -84,8 +69,20 @@ async function submit(flags) {
 
   await mkdir(DISPLAY_DIR, { recursive: true });
   const files = (await walkImages(flags.dir)).slice(0, flags.limit);
-  const requests = [];
   const manifest = {};
+  const batchIds = [];
+  let chunk = [], chunkBytes = 0, total = 0;
+
+  // Submit each batch as its chunk fills, so peak memory is one chunk of
+  // base64 images — accumulating all 3k+ would exhaust the heap.
+  async function flushChunk() {
+    if (!chunk.length) return;
+    const batch = await anthropic.messages.batches.create({ requests: chunk });
+    batchIds.push(batch.id);
+    console.log(`Submitted batch ${batch.id} (${chunk.length} requests).`);
+    chunk = [];
+    chunkBytes = 0;
+  }
 
   for (const file of files) {
     const sourceRef = sourceRefFor(flags.dir, file);
@@ -102,21 +99,23 @@ async function submit(flags) {
 
     const customId = key.slice(0, 64);
     manifest[customId] = { sourceRef, captureDate: date.toISOString(), captureSource: source, displayPath };
-    requests.push(buildBatchRequest({ customId, systemPrompt, schema, base64Image: apiBuf.toString("base64"), mediaType: "image/jpeg" }));
-    console.log(`prepared: ${sourceRef} (${source} date)`);
+
+    const req = buildBatchRequest({ customId, systemPrompt, schema, base64Image: apiBuf.toString("base64"), mediaType: "image/jpeg" });
+    const bytes = Buffer.byteLength(JSON.stringify(req));
+    if (chunk.length && (chunkBytes + bytes > MAX_BATCH_BYTES || chunk.length >= MAX_BATCH_REQUESTS)) {
+      await flushChunk();
+    }
+    chunk.push(req);
+    chunkBytes += bytes;
+    total++;
+    if (total % 100 === 0) console.log(`prepared ${total} photos...`);
   }
 
-  if (requests.length === 0) { console.log("Nothing new to submit."); return; }
+  await flushChunk();
+  if (total === 0) { console.log("Nothing new to submit."); return; }
 
-  const chunks = chunkRequests(requests);
-  const batchIds = [];
-  for (const chunk of chunks) {
-    const batch = await anthropic.messages.batches.create({ requests: chunk });
-    batchIds.push(batch.id);
-    console.log(`Submitted batch ${batch.id} (${chunk.length} requests).`);
-  }
   await writeFile(MANIFEST, JSON.stringify({ batchIds, manifest }, null, 2));
-  console.log(`Submitted ${requests.length} requests across ${batchIds.length} batch(es).`);
+  console.log(`Submitted ${total} requests across ${batchIds.length} batch(es).`);
   console.log(`Run: npm run import:photos -- collect${flags.dryRun ? " --dry-run" : ""}`);
 }
 
