@@ -23,9 +23,11 @@ re-processing any images.
 This is **not** a greenfield feature. The repo already has the relevant
 infrastructure, which this design reuses rather than duplicates:
 
-- **`zones`** table — 8 real, seeded zones with slug, name, polygon shape, and
-  description (`hellstrip`, `foundation-bed`, `cedar-planters`, `pool-spa`,
-  `dry-mineral-bed`, `front-raised-bed`, `north-side-yard`, `stock-tank`).
+- **`zones`** table — 10 real zones with slug, name, polygon shape, and
+  description. Eight are seeded (`hellstrip`, `foundation-bed`, `cedar-planters`,
+  `pool-spa`, `dry-mineral-bed`, `front-raised-bed`, `north-side-yard`,
+  `stock-tank`); two more (`Alley`, `Front Yard`) were added live via the editor.
+  The live DB — not `seed-zones.mjs` — is the source of truth for the zone list.
 - **`zone_photos`** table + a complete upload flow: signed-upload-URL
   ([`upload-url/route.ts`](../../../src/app/api/zone-photos/upload-url/route.ts)) →
   confirm-insert ([`confirm/route.ts`](../../../src/app/api/zone-photos/confirm/route.ts))
@@ -44,7 +46,7 @@ and the photos are already exported to a local folder (no Google Photos API — 
 
 ## Areas (the higher-level grouping)
 
-The 8 zones are fine-grained beds; a single historical photo often shows a broad
+The zones are fine-grained beds; a single historical photo often shows a broad
 region or a bed that did not yet exist. A coarser **area** layer serves both as a
 browse grouping and as the classifier's fallback ("I can tell it's the pool area
 but not which planter").
@@ -53,14 +55,18 @@ Three areas, per the owner's mental model of the yard:
 
 | Area | Covers |
 |---|---|
-| **Front** | North side by the A/C unit, everything under the oak tree, street-facing beds |
+| **Front** | North side by the A/C unit, everything under the oak tree, street-facing beds, the `Front Yard` zone |
 | **Pool** | Pool, spa, patio, cedar planters |
 | **South** | Along the driveway, raised beds, "the field," the vines |
 
+Note the naming overlap: **`Front Yard` is a *zone*** that lives inside the
+**`Front` *area***. Keep the two distinct in code (`zones.area = 'front'` for the
+`Front Yard` zone).
+
 **The giant Red Oak is the firm Front ↔ South demarcation** ("everything past the
-Red Oak is South"), especially once the timeline reaches the Raised Bed Era. The
-Red Oak is not currently on the base map; this design adds it as a `map_label` /
-reference anchor so both humans and the classifier can use it.
+Red Oak is South"), especially once the timeline reaches the Raised Bed Era. A
+`Red Oak` text label has already been added to the map, so the anchor exists for
+both humans and the classifier — no new map work is needed here.
 
 Each zone is assigned to exactly one area (backfilled in the migration). A photo
 resolved to a bed carries both `zone_id` and `area`; a photo resolved only to a
@@ -79,9 +85,10 @@ queue via the same shared classifier — one mechanism, multiple producers.
 ### Schema — migration `0005_photo_classification.sql`
 
 **`zones`:**
-- Add `area text` with a check constraint (`front | pool | south`). Backfill the
-  8 seeded zones (mapping refined during implementation; ambiguous beds
-  `dry-mineral-bed` and `stock-tank` placed explicitly).
+- Add `area text` with a check constraint (`front | pool | south`). Backfill all
+  10 zones (mapping refined during implementation; ambiguous cases —
+  `dry-mineral-bed`, `stock-tank`, and the new `Alley` — placed explicitly, with
+  the `Front Yard` zone assigned to the `front` area).
 
 **`zone_photos`:**
 - `zone_id` → make **nullable** (area-only photos have no bed).
@@ -99,9 +106,14 @@ queue via the same shared classifier — one mechanism, multiple producers.
   - `is_yard boolean` — junk gate
 - Add `ai_meta jsonb not null default '{}'` — the flexible "sub-bucket" for
   exploratory enrichment: `quality`, `hardscape` (milestone flags), `botanical`
-  (`bloom_colors`, plant guesses, notes), `tags`, `time_of_day`, `weather`,
+  (`bloom_colors`, notes), `plants` (see below), `tags`, `time_of_day`, `weather`,
   `reasoning`, and any field added later. Queryable via jsonb operators; promote a
   field to a real column only if it earns it.
+- **`plants` is its own preserved category.** A photo may surface many plant tags;
+  they are kept as a distinct `ai_meta.plants` array (separate from
+  `botanical`/`tags`) and are **never pruned or deduplicated away** — the full list
+  is retained. This keeps the door open to later linking detected plants against the
+  existing `plant_catalog` table without a re-run.
 
 **RLS:** tighten the public-read policy on `zone_photos` to
 `review_status = 'confirmed'`. Existing manual photos default to `confirmed`, so
@@ -144,13 +156,18 @@ path later.
       "cover_crop_field": false,
       "cedar_planters": false
     },
+    "plants": ["..."],
     "botanical": {
       "bloom_colors": ["..."],
-      "plants": ["..."],
       "notes": "exploratory"
     }
   }
   ```
+
+  `plants` is deliberately its own top-level array (not nested under `botanical`)
+  to signal it is a preserved, potentially-long category — see the schema note
+  above. The classifier is told to list every plant it can identify and not to
+  self-limit the count.
 
 - **`classifyImage()`** — wraps a single real-time Messages API call returning the
   above; the live path (Phase 2) calls this directly.
@@ -202,7 +219,9 @@ the ~180 KB display copies (~550 MB for the full set, ~450 MB headroom).
 - `0005_photo_classification.sql`
 - `src/lib/zone-classifier.ts`
 - `scripts/import-photos.mjs` (with `--dry-run`)
-- Red Oak added as a map anchor
+
+(The Red Oak map anchor already exists — added live as a `Red Oak` text label —
+so it is not a deliverable here.)
 
 Outcome: photos classified and imported; high-confidence beds confirmed, the rest
 queued as `pending`; rich `ai_meta` captured for the whole set.
@@ -227,7 +246,8 @@ All Phase 2 work reuses the Phase 1 classifier lib and the same queue/status mod
 
 ## Open items for the implementation plan
 
-- Exact zone → area backfill mapping, including `dry-mineral-bed` and `stock-tank`.
+- Exact zone → area backfill mapping for all 10 zones, including the ambiguous
+  `dry-mineral-bed`, `stock-tank`, and `Alley`, and confirming `Front Yard` → `front`.
 - Whether `is_yard = false` photos are skipped entirely or inserted with a flag.
 - The confidence threshold that separates auto-`confirmed` from `pending`
   (tuned against the `--dry-run` output on a sample).
