@@ -25,7 +25,7 @@
 
 ## Phase A — Foundations + ZonePanel lightbox enrichment
 
-### Task A1: Bloom-color normalization (`photo-facets.ts` — first slice)
+### Task 1: Bloom-color normalization (`photo-facets.ts` — first slice)
 
 **Files:**
 - Create: `src/lib/photo-facets.ts`
@@ -130,14 +130,14 @@ git commit -m "feat: bloom-color normalization for photo enrichment"
 
 ---
 
-### Task A2: `PhotoMeta` enrichment panel
+### Task 2: `PhotoMeta` enrichment panel
 
 **Files:**
 - Create: `src/components/PhotoMeta.tsx`
 - Test: `tests/photo-meta.test.tsx`
 
 **Interfaces:**
-- Consumes: `normalizeBloomColor`, `CANONICAL_COLORS` (Task A1).
+- Consumes: `normalizeBloomColor`, `CANONICAL_COLORS` (Task 1).
 - Produces:
   ```ts
   export type PhotoMetaProps = {
@@ -283,14 +283,14 @@ git commit -m "feat: PhotoMeta shared enrichment panel (caption/blooms/AI summar
 
 ---
 
-### Task A3: `PhotoLightbox` shared viewer
+### Task 3: `PhotoLightbox` shared viewer
 
 **Files:**
 - Create: `src/components/PhotoLightbox.tsx`
 - Test: `tests/photo-lightbox.test.tsx`
 
 **Interfaces:**
-- Consumes: `PhotoMeta`, `PhotoMetaProps` (Task A2).
+- Consumes: `PhotoMeta`, `PhotoMetaProps` (Task 2).
 - Produces:
   ```ts
   export type PhotoLightboxProps = { src: string; alt: string; meta: PhotoMetaProps; onClose: () => void };
@@ -381,14 +381,14 @@ git commit -m "feat: PhotoLightbox shared full-screen viewer with meta panel"
 
 ---
 
-### Task A4: Wire `ZonePanel` to the shared lightbox
+### Task 4: Wire `ZonePanel` to the shared lightbox
 
 **Files:**
 - Modify: `src/components/ZonePanel.tsx` (replace inline lightbox at lines ~223-243; keep `lightboxPhoto` state and the thumbnail `onClick`).
 - Test: reuse `tests/photos-tabs.test.tsx` style is not needed; verify via existing suite + preview.
 
 **Interfaces:**
-- Consumes: `PhotoLightbox` (Task A3). Builds `PhotoMetaProps` from a `ZonePhoto` + the current `zone.name`.
+- Consumes: `PhotoLightbox` (Task 3). Builds `PhotoMetaProps` from a `ZonePhoto` + the current `zone.name`.
 
 - [ ] **Step 1: Add the import and a meta-builder, replace the inline lightbox**
 
@@ -438,7 +438,7 @@ git commit -m "feat: ZonePanel uses shared PhotoLightbox with enrichment"
 
 ## Phase B — Filterable gallery (`/gallery`)
 
-### Task B1: Era primitives (`eras.mjs`) + committed stub (`eras.data.ts`)
+### Task 5: Era primitives (`eras.mjs`) + committed stub (`eras.data.ts`)
 
 **Files:**
 - Create: `src/lib/eras.mjs`
@@ -570,14 +570,14 @@ git commit -m "feat: era primitives (season/assign) + empty eras.data stub"
 
 ---
 
-### Task B2: Facet derivation, filtering & search (`photo-facets.ts` — full)
+### Task 6: Facet derivation, filtering & search (`photo-facets.ts` — full)
 
 **Files:**
-- Modify: `src/lib/photo-facets.ts` (append; keep Task A1 exports)
+- Modify: `src/lib/photo-facets.ts` (append; keep Task 1 exports)
 - Modify: `tests/photo-facets.test.ts` (append)
 
 **Interfaces:**
-- Consumes: `normalizeBloomColor` (A1); `MILESTONE_KEYS`, `assignEra`, `seasonYear` (B1, from `eras.mjs`); `EraContent`, `MilestoneKey` (B1, from `eras.data`); `Zone`, `ZonePhoto`, `AiMeta` (`src/lib/types`).
+- Consumes: `normalizeBloomColor` (Task 1); `MILESTONE_KEYS`, `assignEra`, `seasonYear` (Task 5, from `eras.mjs`); `EraContent`, `MilestoneKey` (Task 5, from `eras.data`); `Zone`, `ZonePhoto`, `AiMeta` (`src/lib/types`).
 - Produces:
   ```ts
   export type MilestoneKey = ... // re-exported from eras.data for convenience
@@ -689,7 +689,7 @@ Expected: FAIL — `deriveFacet` etc. not exported.
 - [ ] **Step 3: Append the implementation to `src/lib/photo-facets.ts`**
 
 ```ts
-// --- appended below Task A1 exports ---
+// --- appended below Task 1 exports ---
 import type { Area, Zone, ZonePhoto } from "./types";
 import type { EraContent, MilestoneKey } from "./eras.data";
 import { MILESTONE_KEYS, assignEra, seasonYear } from "./eras.mjs";
@@ -795,11 +795,11 @@ git commit -m "feat: photo facet derivation, filtering, search, and counts"
 
 ---
 
-### Task B3: Gallery server page (compact projection loader)
+### Task 7: Gallery server page (compact projection loader)
 
 **Files:**
 - Create: `src/app/gallery/page.tsx`
-- Create: `src/app/gallery/GalleryBrowser.tsx` (stub rendered here; filled in B4)
+- Create: `src/app/gallery/GalleryBrowser.tsx` (stub rendered here; filled in Task 8)
 
 **Interfaces:**
 - Consumes: `getServerSupabase`, `deriveFacet`, `ERAS`, `Zone`/`ZonePhoto` types.
@@ -875,14 +875,14 @@ git commit -m "feat: /gallery server page loads confirmed photos as facet projec
 
 ---
 
-### Task B4: `GalleryBrowser` — grouped chips, grid, lightbox
+### Task 8: `GalleryBrowser` — grouped chips, grid, lightbox
 
 **Files:**
 - Modify: `src/app/gallery/GalleryBrowser.tsx`
 - Test: `tests/gallery-browser.test.tsx`
 
 **Interfaces:**
-- Consumes: `Filters`, `EMPTY_FILTERS`, `matchesFilters`, `availableFacets`, `CANONICAL_COLORS` (photo-facets); `MILESTONES` (eras.mjs); `ERAS` (eras.data); `AREA_LABELS` (zones); `publicPhotoUrl` (photos); `PhotoLightbox` (A3).
+- Consumes: `Filters`, `EMPTY_FILTERS`, `matchesFilters`, `availableFacets`, `CANONICAL_COLORS` (photo-facets); `MILESTONES` (eras.mjs); `ERAS` (eras.data); `AREA_LABELS` (zones); `publicPhotoUrl` (photos); `PhotoLightbox` (Task 3).
 - Renders grouped filter chips (Area / Era / Season / Milestone / Bloom / Quality) + search box + result count + responsive grid; tapping a thumb opens `PhotoLightbox` built from the facet.
 
 - [ ] **Step 1: Write the failing test**
@@ -1117,7 +1117,7 @@ git commit -m "feat: gallery browser — grouped facet chips, grid, lightbox"
 
 ---
 
-### Task B5: Nav "Gallery" link
+### Task 9: Nav "Gallery" link
 
 **Files:**
 - Modify: `src/components/Nav.tsx`
@@ -1161,10 +1161,10 @@ git commit -m "feat: public Gallery nav link"
 
 ## Phase C — Eras engine, generator, and `/timeline`
 
-### Task C1: Milestone detection + era building (`eras.mjs` — extend)
+### Task 10: Milestone detection + era building (`eras.mjs` — extend)
 
 **Files:**
-- Modify: `src/lib/eras.mjs` (append; keep B1 exports)
+- Modify: `src/lib/eras.mjs` (append; keep Task 5 exports)
 - Modify: `tests/eras.test.ts` (append)
 
 **Interfaces:**
@@ -1242,7 +1242,7 @@ Expected: FAIL — `detectMilestoneArrivals` etc. not exported.
 - [ ] **Step 3: Append the implementation to `src/lib/eras.mjs`**
 
 ```js
-// --- appended below B1 exports ---
+// --- appended below Task 5 exports ---
 const dayMs = 86400000;
 const takenOf = (p) => p.taken_at ?? p.uploaded_at;
 const flagsOf = (p) => (p.ai_meta && p.ai_meta.hardscape) || {};
@@ -1332,7 +1332,7 @@ git commit -m "feat: milestone detection, era building, season grouping"
 
 ---
 
-### Task C2: `scripts/generate-eras.mjs` — boundaries + AI headlines → `eras.data.ts`
+### Task 11: `scripts/generate-eras.mjs` — boundaries + AI headlines → `eras.data.ts`
 
 **Files:**
 - Create: `scripts/generate-eras.mjs`
@@ -1508,7 +1508,7 @@ git commit -m "feat: generate-eras script (deterministic boundaries + AI headlin
 
 ---
 
-### Task C3: `/timeline` page — sticky era rail
+### Task 12: `/timeline` page — sticky era rail
 
 **Files:**
 - Create: `src/app/timeline/page.tsx`
@@ -1712,7 +1712,7 @@ git commit -m "feat: /timeline page — sticky era rail with nested seasons"
 
 ---
 
-### Task C4: Nav "Timeline" link
+### Task 13: Nav "Timeline" link
 
 **Files:**
 - Modify: `src/components/Nav.tsx`
