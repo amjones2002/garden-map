@@ -13,6 +13,7 @@ async function loadConfirmed(sb: ReturnType<typeof getServerSupabase>): Promise<
       .from("zone_photos").select("*")
       .eq("review_status", "confirmed")
       .order("taken_at", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, from + 999);
     if (error) throw error;
     out.push(...((data ?? []) as ZonePhoto[]));
