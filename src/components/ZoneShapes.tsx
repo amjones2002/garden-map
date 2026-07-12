@@ -1,4 +1,4 @@
-import { centroid, toSvgPoints } from "@/lib/geometry";
+import { visualCenter, fitLabel, toSvgPoints } from "@/lib/geometry";
 import type { Zone } from "@/lib/types";
 
 const SIZE = 1000;
@@ -18,7 +18,18 @@ export default function ZoneShapes({
         const pts = Array.isArray(z.shape) ? z.shape : [];
         if (pts.length < 3) return null;
         const selected = z.id === selectedId;
-        const c = centroid(pts);
+        const c = visualCenter(pts);
+        const cx = c.x * SIZE;
+        const cy = c.y * SIZE;
+
+        const xs = pts.map((p) => p.x);
+        const ys = pts.map((p) => p.y);
+        const boxWidth = (Math.max(...xs) - Math.min(...xs)) * SIZE;
+        const boxHeight = (Math.max(...ys) - Math.min(...ys)) * SIZE;
+        const { lines, fontSize } = fitLabel(z.label ?? z.name, boxWidth, boxHeight);
+        const linePx = fontSize * 1.15;
+        const startY = cy - ((lines.length - 1) / 2) * linePx;
+
         return (
           <g
             key={z.id}
@@ -39,15 +50,19 @@ export default function ZoneShapes({
               strokeWidth={selected ? 7 : 3}
             />
             <text
-              x={c.x * SIZE}
-              y={c.y * SIZE}
-              fontSize={34}
+              x={cx}
+              y={startY}
+              fontSize={fontSize}
               textAnchor="middle"
               dominantBaseline="middle"
               fill="#2f3722"
               style={{ pointerEvents: "none", fontFamily: "var(--font-hand), cursive" }}
             >
-              {z.label ?? z.name}
+              {lines.map((line, i) => (
+                <tspan key={i} x={cx} y={startY + i * linePx}>
+                  {line}
+                </tspan>
+              ))}
             </text>
           </g>
         );
