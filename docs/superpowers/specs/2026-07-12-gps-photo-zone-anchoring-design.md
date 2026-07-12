@@ -17,7 +17,7 @@ of already-auto-tagged photos that need re-running.
 This design anchors classification to the one signal that *does* separate the areas
 — the **camera's GPS coordinates**, which every photo carries in EXIF — and closes
 the tracking gap so that human corrections accumulate into a clean, queryable
-training set for an ongoing exemplar loop.
+training set for an ongoing text-lesson feedback loop.
 
 Approach **C (staged)**:
 
@@ -25,10 +25,11 @@ Approach **C (staged)**:
   georeference) to an **area** and a shortlist of nearby beds, and hand that to the
   classifier as a strong prior. GPS decisively fixes the Front↔South error and
   rescues the backlog.
-- **Phase 2 — exemplar loop + close-up handling.** Feed confirmed photos back as
-  few-shot vision exemplars; auto-defer genuinely-ambiguous close-ups to the human.
-  This is the "train the model ongoing" the owner asked about — no fine-tuning,
-  just prompt-level feedback that compounds as the backlog is reviewed.
+- **Phase 2 — text-lesson hints + close-up handling.** Distill human corrections
+  into short written disambiguation notes injected into the classifier prompt;
+  auto-defer genuinely-ambiguous close-ups to the human. This is the "train the
+  model ongoing" the owner asked about — no fine-tuning, no per-call image cost,
+  just cheap prompt-level feedback that compounds as the backlog is reviewed.
 
 ## Context: what already exists
 
@@ -167,20 +168,71 @@ confidence and explicit reasoning — e.g. a photo shot *across* the yard from t
 south toward the pool. The bed within the area is the model's call, informed by the
 shortlist. Photos with no GPS fix use the unchanged vision-only path.
 
-## Phase 2 — exemplar loop + close-up handling
+## Phase 2 — text-lesson hints + close-up handling
 
 *(Noted, not built in Phase 1. Reuses the same classifier and queue.)*
+
+Human corrections are distilled into short **written disambiguation notes** injected
+into the classifier prompt, so the next classification avoids the repeat mistake.
+Chosen over few-shot *image* exemplars deliberately: image exemplars add ~1,600
+tokens **per exemplar per photo** to every classify call, whereas the entire text-
+lesson block is a few hundred tokens sent once — and prompt-cacheable on the live
+route (see Cost model). Legible and directly editable, which suits a single owner
+who knows the ground truth.
+
+**Two homes in the prompt** — both already flow through `buildSystemPrompt(zones)`:
+
+- **Per-zone tells** — appended to each zone's existing `description` column ("how to
+  recognize *this* bed": *"cedar-planters — raised cedar boxes against the pool-side
+  brick wall; pool usually visible in frame"*). No new storage; edited in the
+  existing zone editor.
+- **A global "Common confusions" block** — the pairwise tie-breakers, and where the
+  Front↔South fix lives *in text*, complementing the GPS prior: *"Front vs South:
+  everything past the Red Oak is South; Front beds face the street and show the brick
+  facade/hedge, South beds run along the driveway/fence."* Stored as a single
+  maintained `classifier_notes` value (config row or repo markdown the prompt reads).
+
+**The ongoing loop (the "train the model" the owner wanted):**
+
+1. **Seed now, by hand** — write the Front↔South tells and anchor cues already known
+   (wide shots easy, close-ups hard, Red Oak divider, hardscape landmarks). Immediate
+   lift, no accumulated data required.
+2. **Capture at review** — an optional one-line *"why was the AI wrong?"* note on
+   reassign/reject, stored on the row (`review_note`, or under `ai_meta`). Raw
+   material; never required.
+3. **Distill periodically (optional LLM-assist)** — a small pass clusters recent
+   corrections by confused-pair (`ai_zone_slug` ≠ final `zone_id`) and **drafts**
+   candidate note edits for the owner to approve/edit. The human stays in the loop —
+   nothing auto-injects an unverified tell.
+
+*Recommended sequencing: manual seed + capture-at-review first; add the LLM-drafting
+assist only if correction volume justifies it.*
 
 - **Close-up detection.** The output schema gains `framing: "closeup" | "context"`.
   A `closeup` photo with low confidence and no decisive GPS bed is **auto-deferred**
   to `pending` rather than guessed — matching the owner's observation that
   zoomed-in plant shots are hard even for a human, while anything wider is easy.
-- **Exemplar few-shot.** For context shots, inject a few **confirmed exemplar
-  images** (drawn only from `review_action IS NOT NULL` rows) of the candidate beds
-  as few-shot vision examples: *"here is a confirmed `cedar-planters` photo, here is
-  a confirmed `pool-spa` photo."* Seeded by the backlog review; every correction
-  sharpens the next classification. Selection strategy (recency, per-zone caps,
-  token budget) is a Phase 2 detail.
+- **Image exemplars — rare escalation only.** Confirmed exemplar images (from
+  `review_action IS NOT NULL` rows) are kept as a targeted fallback for a bed that
+  text genuinely can't describe — *not* the default, given the per-call token cost.
+
+## Cost model
+
+The one-time Vision batch already ran: **$34.29** (not the ~$9 the earlier pipeline
+spec estimated). The gap was the ~3,400-token system prompt billed **uncached on
+every one of ~3,000 batch requests** — the Batch API shares no prompt cache
+(`cache_read`/`cache_write` were zero on the invoice) — plus ~500 tokens/photo of
+verbose enrichment output. This shapes the design:
+
+- **The GPS area re-run costs ≈ $0.** It is point-in-polygon geometry, *not* a Vision
+  call — correcting Front↔South across the whole corpus adds nothing to the bill.
+- **Text lessons ≈ free.** A few hundred tokens once per call, versus image
+  exemplars' ~1,600 tokens each — the reason Phase 2 favors text.
+- **Any future at-scale Vision re-run should use the live route with prompt caching,
+  not batch.** `cache_control` on the zone-enumeration system block cuts the repeated
+  ~3,400-token prefix to ~10% on cache hits; for a large shared prompt, cached live
+  calls beat the Batch API's flat 50% discount (the same run cached would have been
+  ~$10–12).
 
 ## Phase boundaries
 
@@ -198,13 +250,18 @@ per-photo provenance recorded; the transform live and self-refining.
 
 **Phase 2 (noted, not built now):**
 - `framing` flag + close-up auto-deferral
-- Confirmed-exemplar few-shot injection
+- Text-lesson hints: seed per-zone tells + a `classifier_notes` "Common confusions"
+  block; capture-at-review notes; optional LLM-assisted distillation
+- (Optional) confirmed-image exemplars as a rare escalation only
 - (Optional) an accuracy view over `review_action` — trivial once the column exists
 
 ## Non-goals
 
 - **No model fine-tuning / no separate ML model.** The classifier stays a Claude
-  vision prompt; "ongoing training" = prompt-level feedback (GPS prior + exemplars).
+  vision prompt; "ongoing training" = prompt-level feedback (GPS prior + text-lesson
+  hints).
+- **No image few-shot exemplars by default.** Ruled out on cost (~1,600 tokens per
+  exemplar per call); text lessons are the Phase 2 mechanism, images a rare fallback.
 - **No accuracy dashboard now.** The `review_action` column makes one a later
   formality if wanted.
 - **No new table** — extend `zone_photos`; the transform is a small config row/JSON.
@@ -226,3 +283,6 @@ per-photo provenance recorded; the transform live and self-refining.
   (the backfill join); fallback to content-hash matching if not.
 - `exifr` GPS field coverage across the real corpus (the `--dry-run` coverage report
   quantifies how many photos actually carry a fix before committing).
+- Where the global `classifier_notes` lives (config row vs. repo markdown) and where
+  the capture-at-review note is stored (`review_note` column vs. `ai_meta`) — both
+  Phase 2, but named here so Phase 1's schema leaves room.
