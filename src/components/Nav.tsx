@@ -21,6 +21,7 @@ export default function Nav() {
       <Link href="/" style={item}>Map</Link>
       <Link href="/tracker" style={item}>Tracker</Link>
       <Link href="/gallery" style={item}>Gallery</Link>
+      <Link href="/timeline" style={item}>Timeline</Link>
       {unlocked && (
         <Link href="/photos" style={{ ...item, color: "#8e3b5e" }}>Photos</Link>
       )}

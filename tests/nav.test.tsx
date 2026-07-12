@@ -14,4 +14,9 @@ describe("Nav", () => {
     render(<EditModeProvider><Nav /></EditModeProvider>);
     expect(screen.getByRole("link", { name: /gallery/i })).toBeDefined();
   });
+
+  it("renders a public Timeline link", () => {
+    render(<EditModeProvider><Nav /></EditModeProvider>);
+    expect(screen.getByRole("link", { name: /timeline/i })).toBeDefined();
+  });
 });
