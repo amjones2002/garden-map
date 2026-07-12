@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { AreaSection } from "@/lib/zones";
 import type { Zone } from "@/lib/types";
+import ReviewTab from "./ReviewTab";
 
 type Tab = "upload" | "review";
 
@@ -17,8 +18,6 @@ export default function PhotosTabs({
   initialTab: Tab;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
-  void sections;
-  void zones;
 
   const tabBtn = (active: boolean): React.CSSProperties => ({
     background: "transparent",
@@ -42,7 +41,7 @@ export default function PhotosTabs({
           To review <span style={{ color: "#8e3b5e" }}>{pendingCount.toLocaleString()}</span>
         </button>
       </div>
-      {tab === "upload" ? <div data-testid="tab-upload" /> : <div data-testid="tab-review" />}
+      {tab === "upload" ? <div data-testid="tab-upload" /> : <ReviewTab sections={sections} zones={zones} />}
     </div>
   );
 }
