@@ -68,9 +68,9 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
     }
   }
 
-  async function saveOne(idx: number) {
-    const it = items[idx];
-    if (!it.ai || !it.chosenZoneId) return;
+  async function saveOne(uid: string) {
+    const it = items.find((x) => x.uid === uid);
+    if (!it || !it.ai || !it.chosenZoneId) return;
     const zone = zones.find((z) => z.id === it.chosenZoneId);
     const res = await fetch("/api/zone-photos/confirm", {
       method: "POST",
@@ -99,10 +99,10 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
         },
       }),
     });
-    if (res.ok) setItems((prev) => prev.map((x, i) => (i === idx ? { ...x, status: "saved" } : x)));
+    if (res.ok) setItems((prev) => prev.map((x) => (x.uid === uid ? { ...x, status: "saved" as const } : x)));
   }
 
-  const saveAll = () => items.forEach((it, i) => it.status === "ready" && !it.skip && it.chosenZoneId && saveOne(i));
+  const saveAll = () => items.forEach((it) => it.status === "ready" && !it.skip && it.chosenZoneId && saveOne(it.uid));
   const savable = items.filter((it) => it.status === "ready" && !it.skip && it.chosenZoneId).length;
 
   return (
@@ -113,7 +113,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
         <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { const f = Array.from(e.target.files ?? []); if (f.length) onFiles(f); e.target.value = ""; }} />
       </label>
 
-      {items.map((it, idx) => (
+      {items.map((it) => (
         <div key={it.uid} style={{ display: "flex", gap: 10, alignItems: "center", background: "#f5efe0", border: `1px solid ${it.skip ? "#d8b58c" : "#cbb994"}`, borderRadius: 10, padding: 8, marginBottom: 6, opacity: it.status === "saved" ? 0.5 : 1 }}>
           <div style={{ flex: 1, fontSize: 12 }}>
             <div style={{ color: "#8a8268" }}>{it.file.name}{it.takenAt ? ` · ${it.takenAt.slice(0, 10)}` : ""}</div>
@@ -124,13 +124,13 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
           </div>
           {it.status !== "saved" && (
             <>
-              <select value={it.chosenZoneId} onChange={(e) => setItems((prev) => prev.map((x, i) => (i === idx ? { ...x, chosenZoneId: e.target.value } : x)))} style={{ fontSize: 12, border: "1px solid #cbb994", borderRadius: 8, background: "#fff", padding: "4px 6px" }}>
+              <select value={it.chosenZoneId} onChange={(e) => setItems((prev) => prev.map((x) => (x.uid === it.uid ? { ...x, chosenZoneId: e.target.value } : x)))} style={{ fontSize: 12, border: "1px solid #cbb994", borderRadius: 8, background: "#fff", padding: "4px 6px" }}>
                 <option value="">choose zone…</option>
                 {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
               </select>
               {it.skip
-                ? <button onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} style={{ fontSize: 12, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Skip</button>
-                : <button onClick={() => saveOne(idx)} disabled={!it.chosenZoneId} style={{ fontSize: 12, border: "none", background: "#8e3b5e", color: "#fff", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Save</button>}
+                ? <button onClick={() => setItems((prev) => prev.filter((x) => x.uid !== it.uid))} style={{ fontSize: 12, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Skip</button>
+                : <button onClick={() => saveOne(it.uid)} disabled={!it.chosenZoneId} style={{ fontSize: 12, border: "none", background: "#8e3b5e", color: "#fff", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Save</button>}
             </>
           )}
           {it.status === "saved" && <span style={{ fontSize: 12, color: "#3f4a2e" }}>saved ✓</span>}
