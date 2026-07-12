@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Zone } from "@/lib/types";
+import { sortZonesByName } from "@/lib/zones";
 import { getExifDateTaken } from "@/lib/exif";
 import { MODEL } from "@/lib/zone-classifier.mjs";
 
@@ -49,6 +50,7 @@ async function uploadAndClassify(file: File): Promise<{ storagePath: string; ai:
 export default function UploadTab({ zones }: { zones: Zone[] }) {
   const [items, setItems] = useState<Item[]>([]);
   const zoneIdBySlug = new Map(zones.map((z) => [z.slug, z.id]));
+  const zonesAlpha = sortZonesByName(zones);
 
   async function onFiles(files: File[]) {
     for (const file of files) {
@@ -126,7 +128,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
             <>
               <select value={it.chosenZoneId} onChange={(e) => setItems((prev) => prev.map((x) => (x.uid === it.uid ? { ...x, chosenZoneId: e.target.value } : x)))} style={{ fontSize: 12, border: "1px solid #cbb994", borderRadius: 8, background: "#fff", padding: "4px 6px" }}>
                 <option value="">choose zone…</option>
-                {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                {zonesAlpha.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
               </select>
               {it.skip
                 ? <button onClick={() => setItems((prev) => prev.filter((x) => x.uid !== it.uid))} style={{ fontSize: 12, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Skip</button>

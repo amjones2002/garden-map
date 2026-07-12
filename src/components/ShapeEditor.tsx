@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { centroid, normalizeShape, toSvgPoints, type Point } from "@/lib/geometry";
 import type { Zone } from "@/lib/types";
+import { sortZonesByName } from "@/lib/zones";
 import BaseMap from "./BaseMap";
 
 const SIZE = 1000;
@@ -162,7 +163,7 @@ export default function ShapeEditor() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         <select style={ctrl} value={selectedId} onChange={(e) => selectZone(e.target.value)}>
           <option value="">— choose a zone —</option>
-          {zones.map((z) => (
+          {sortZonesByName(zones).map((z) => (
             <option key={z.id} value={z.id}>
               {z.name}
               {z.archived_at ? " (archived)" : ""}
