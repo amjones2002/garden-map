@@ -13,6 +13,7 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
   const [page, setPage] = useState(0);
   const [zoneFilter, setZoneFilter] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
   const nameById = new Map(zones.map((z) => [z.id, z.name]));
 
   const load = useCallback(async () => {
@@ -36,11 +37,16 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
   }, [open, load]);
 
   const reopen = async (id: string, action: "reject" | "reassign", zone_id?: string) => {
-    await fetch("/api/zone-photos/review", {
+    setReopenError(null);
+    const res = await fetch("/api/zone-photos/review", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: [id], action, zone_id }),
     });
+    if (!res.ok) {
+      setReopenError("Re-open failed — please try again.");
+      return;
+    }
     setRows((r) => r.filter((p) => p.id !== id));
   };
 
@@ -56,6 +62,7 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
             {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
           </select>
           {loading && <p style={{ fontSize: 12, color: "#8a8268" }}>Loading…</p>}
+          {reopenError && <p style={{ fontSize: 12, color: "#8e3b5e" }}>{reopenError}</p>}
           {rows.map((p) => (
             <div key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: 6, background: "#f5efe0", border: "1px solid #cbb994", borderRadius: 8, marginBottom: 5 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
