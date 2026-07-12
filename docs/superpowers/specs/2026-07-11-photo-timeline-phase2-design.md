@@ -272,3 +272,16 @@ Follows the existing `tests/` + TDD pattern (Phase 1 has `tests/zone-classifier.
 - Auto-tag log pagination page size and filter UI.
 - Lightbox: reuse `ZonePanel`'s inline lightbox or extract a shared component.
 - Whether the "Upload photos" button lives in `Nav` (global) or on the map page.
+
+## Deploy notes
+
+- **Call the Anthropic SDK directly** (`@anthropic-ai/sdk`) via the shared
+  `zone-classifier.mjs` — **not** Vercel AI Gateway / the AI SDK. The gateway's
+  abstraction doesn't cleanly expose the Anthropic-specific features the shared lib
+  relies on (Batches API, `output_config` structured outputs), and adopting it would
+  mean rewriting the classifier — a non-goal.
+- **`ANTHROPIC_API_KEY`** must be a server-side Vercel env var (not `NEXT_PUBLIC_`).
+  *Done — added to Vercel.* Already present locally for `scripts/import-photos.mjs`.
+- **Do not enable Zero Data Retention** on the Anthropic account: it's unnecessary
+  for personal yard photos and is incompatible with the Batches API's 29-day result
+  window that the Phase 1 import relies on.
