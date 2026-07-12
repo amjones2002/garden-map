@@ -77,8 +77,8 @@ describe("resolveGpsHint", () => {
   });
 
   it("falls back to nearest zone's area when no polygon contains the point", () => {
-    // lng=0.1, lat=0.9 is outside all beds but nearest to south-a.
-    const hint = resolveGpsHint(identity, 0.9, 0.1, zones as never);
+    // lng=0.9, lat=0.9 is outside all beds; nearest centroid is south-a.
+    const hint = resolveGpsHint(identity, 0.9, 0.9, zones as never);
     expect(hint!.area).toBe("south");
   });
 });
