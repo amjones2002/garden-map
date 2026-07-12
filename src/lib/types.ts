@@ -1,3 +1,18 @@
+export type Area = "front" | "pool" | "south";
+export type ReviewStatus = "pending" | "confirmed" | "rejected";
+export type PhotoSource = "manual" | "batch_import" | "phone_sync";
+
+export type AiMeta = {
+  quality?: "good" | "ok" | "poor";
+  reasoning?: string;
+  tags?: string[];
+  plants?: string[];
+  hardscape?: Record<string, boolean>;
+  botanical?: { bloom_colors?: string[]; notes?: string };
+  capture_source?: string;
+  [key: string]: unknown;
+};
+
 export type Zone = {
   id: string;
   slug: string;
@@ -10,6 +25,7 @@ export type Zone = {
   created_at: string;
   updated_at?: string;
   archived_at?: string | null;
+  area: Area | null;
 };
 
 export type Vendor = {
@@ -54,12 +70,22 @@ export type Purchase = {
 
 export type ZonePhoto = {
   id: string;
-  zone_id: string;
+  zone_id: string | null;
   storage_path: string;
   caption: string | null;
   taken_at: string | null;
   uploaded_at: string;
   sort_order: number;
+  area: Area | null;
+  review_status: ReviewStatus;
+  source: PhotoSource;
+  source_ref: string | null;
+  ai_zone_slug: string | null;
+  ai_area: Area | null;
+  ai_confidence: number | null;
+  ai_model: string | null;
+  is_yard: boolean | null;
+  ai_meta: AiMeta;
 };
 
 export type PlantCatalog = {
