@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { AreaSection, ZoneGroup } from "@/lib/zones";
 import type { Zone, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl } from "@/lib/photos";
+import AutoTagLog from "./AutoTagLog";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
@@ -139,6 +140,7 @@ export default function ReviewTab({ sections, zones }: { sections: AreaSection[]
     return (
       <div data-testid="tab-review">
         <p style={{ color: "#8a8268" }}>Nothing pending — the queue is clear.</p>
+        <AutoTagLog zones={zones} />
       </div>
     );
   return (
@@ -154,6 +156,7 @@ export default function ReviewTab({ sections, zones }: { sections: AreaSection[]
           <AreaOnlyBucket photos={section.areaOnly} label={section.label} zones={zones} />
         </section>
       ))}
+      <AutoTagLog zones={zones} />
     </div>
   );
 }
