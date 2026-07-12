@@ -76,9 +76,11 @@ migration**.
 Confirmed rows contain **2,125 distinct tag strings, 3,698 distinct plant strings**
 (free-text: *"possibly salvia"*, *"ornamental grasses or perennials along fence
 bed"*), and 101 bloom-color variants. **Raw `tags`/`plants` cannot be filter
-facets** — thousands of one-offs. They render as per-photo display chips only.
-Filtering runs on the **clean, low-cardinality** dimensions; free-text search covers
-the messy ones.
+facets** — thousands of one-offs. They are also too noisy to *display* as
+authoritative chips (a chip reads as a fact; these are hedged guesses), so they are
+**search-only**: they feed the gallery's free-text search but are never rendered as
+per-photo chips. Filtering and display both run on the **clean, low-cardinality**
+dimensions; the messy strings surface only through search and the prose caption.
 
 ## Non-goals
 
@@ -157,12 +159,12 @@ no `eraKey`, so the gallery's **Era** facet simply doesn't render until the scri
 has run — a graceful, ordering-safe default.
 
 **4. `src/components/PhotoMeta.tsx`** — the one reusable enrichment panel. Given a
-`ZonePhoto` (+ resolved zone name + era title), renders, in order:
+`ZonePhoto` (+ resolved zone name + optional era title), renders, in order:
 caption → facts line (date · zone · era · `quality` badge) → **Blooming** (normalized
-bloom-color swatches) → **Plants spotted** (green chips from `ai_meta.plants`) →
-**In frame** (muted chips from `ai_meta.tags`) → a collapsible **"AI Summary"**
-disclosure (`ai_meta.reasoning`, closed by default). Sections with no data are
-omitted. Pure presentational; no data fetching.
+bloom-color swatches) → a collapsible **"AI Summary"** disclosure (`ai_meta.reasoning`,
+closed by default). **Raw `ai_meta.plants`/`ai_meta.tags` are deliberately not
+rendered** (search-only — see the constraint above); the caption carries the readable
+description. Sections with no data are omitted. Pure presentational; no data fetching.
 
 **5. `src/components/PhotoLightbox.tsx`** — extracted from `ZonePanel`'s inline
 lightbox into a shared component (full-screen image + `PhotoMeta`), so the map
@@ -248,7 +250,9 @@ Follows the existing `tests/` + TDD pattern.
   a single stray flag doesn't move the arrival), `buildEras` (same-window bundling,
   leading pre-build era, ongoing final era), `assignEra` boundaries, `groupBySeason`.
 - **`PhotoMeta` / `PhotoLightbox`** — render tests: sections appear only when data
-  present; "AI Summary" collapsed by default; empty `ai_meta` shows caption only.
+  present; "AI Summary" collapsed by default; empty `ai_meta` shows caption only;
+  **`plants`/`tags` are never rendered even when populated** (locks the search-only
+  decision).
 - **`GalleryBrowser`** — filter interaction narrows the rendered set; "clear"
   resets; result count matches.
 - **Manual/preview** — dev server: open a map-zone photo and confirm enrichment
