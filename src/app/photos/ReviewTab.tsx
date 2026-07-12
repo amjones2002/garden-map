@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Image from "next/image";
-import type { AreaSection, ZoneGroup } from "@/lib/zones";
+import { sortZonesByName, type AreaSection, type ZoneGroup } from "@/lib/zones";
 import type { Zone, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl } from "@/lib/photos";
 import AutoTagLog from "./AutoTagLog";
@@ -62,7 +62,7 @@ function Thumb({
           style={{ fontSize: 10, flex: 1, minWidth: 0, border: "1px solid #cbb994", borderRadius: 3, background: "#f5efe0" }}
         >
           <option value="">move…</option>
-          {zones.map((z) => (
+          {sortZonesByName(zones).map((z) => (
             <option key={z.id} value={z.id}>{z.name}</option>
           ))}
         </select>

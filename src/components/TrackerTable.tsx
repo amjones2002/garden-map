@@ -4,6 +4,7 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 import { useEditMode } from "@/lib/edit-mode";
 import type { Zone, Vendor, Purchase } from "@/lib/types";
 import { PURCHASE_STATUSES, filterPurchases, sortPurchases, toCsv } from "@/lib/purchases";
+import { sortZonesByName } from "@/lib/zones";
 import PurchaseForm from "./PurchaseForm";
 
 const ctrl: React.CSSProperties = { minHeight: 36, padding: "4px 8px", borderRadius: 8, border: "1px solid #cbb994" };
@@ -48,6 +49,7 @@ export default function TrackerTable() {
 
   const zoneNames = useMemo(() => Object.fromEntries(zones.map((z) => [z.id, z.name])), [zones]);
   const vendorNames = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v.name])), [vendors]);
+  const zonesAlpha = useMemo(() => sortZonesByName(zones), [zones]);
 
   const visible = useMemo(
     () => sortPurchases(filterPurchases(purchases, filters), sort.key, sort.dir),
@@ -120,7 +122,7 @@ export default function TrackerTable() {
         <input style={ctrl} placeholder="search plant…" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
         <select style={ctrl} value={filters.zoneId} onChange={(e) => setFilters((f) => ({ ...f, zoneId: e.target.value }))}>
           <option value="">all zones</option>
-          {zones.map((z) => (<option key={z.id} value={z.id}>{z.name}</option>))}
+          {zonesAlpha.map((z) => (<option key={z.id} value={z.id}>{z.name}</option>))}
         </select>
         <select style={ctrl} value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
           <option value="">all statuses</option>

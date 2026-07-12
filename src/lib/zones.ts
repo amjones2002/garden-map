@@ -3,6 +3,11 @@ import type { Area, Zone, ZonePhoto } from "./types";
 export const AREA_ORDER: Area[] = ["front", "pool", "south"];
 export const AREA_LABELS: Record<Area, string> = { front: "Front", pool: "Pool", south: "South" };
 
+/** Zones sorted alphabetically by name, for dropdown display (independent of map sort_order). */
+export function sortZonesByName(zones: Zone[]): Zone[] {
+  return [...zones].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** The area a zone belongs to (null when the zone/id is unknown). */
 export function areaForZone(zoneId: string | null, zones: Zone[]): Area | null {
   if (!zoneId) return null;

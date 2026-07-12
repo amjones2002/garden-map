@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { publicPhotoUrl } from "@/lib/photos";
 import type { Zone, ZonePhoto } from "@/lib/types";
+import { sortZonesByName } from "@/lib/zones";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PAGE = 25;
@@ -15,6 +16,7 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
   const [loading, setLoading] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const nameById = new Map(zones.map((z) => [z.id, z.name]));
+  const zonesAlpha = sortZonesByName(zones);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,7 +62,7 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
         <div style={{ marginTop: 8 }}>
           <select value={zoneFilter} onChange={(e) => { setPage(0); setZoneFilter(e.target.value); }} style={{ fontSize: 12, marginBottom: 8, border: "1px solid #cbb994", borderRadius: 8, background: "#f5efe0", padding: "4px 8px" }}>
             <option value="">All zones</option>
-            {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+            {zonesAlpha.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
           </select>
           {loading && <p style={{ fontSize: 12, color: "#8a8268" }}>Loading…</p>}
           {reopenError && <p style={{ fontSize: 12, color: "#8e3b5e" }}>{reopenError}</p>}
@@ -74,7 +76,7 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
               </div>
               <select defaultValue="" onChange={(e) => e.target.value && reopen(p.id, "reassign", e.target.value)} aria-label="Reassign" style={{ fontSize: 11, border: "1px solid #cbb994", borderRadius: 6, background: "#fff" }}>
                 <option value="">reassign…</option>
-                {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                {zonesAlpha.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
               </select>
               <button onClick={() => reopen(p.id, "reject")} style={{ fontSize: 11, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 6, padding: "3px 7px", cursor: "pointer" }}>Reject</button>
             </div>

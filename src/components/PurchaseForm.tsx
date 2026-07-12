@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Zone, Vendor, Purchase } from "@/lib/types";
 import { PURCHASE_STATUSES } from "@/lib/purchases";
+import { sortZonesByName } from "@/lib/zones";
 import PlantField from "./PlantField";
 
 const field: React.CSSProperties = {
@@ -32,6 +33,7 @@ export default function PurchaseForm({
   onVendorAdded: (v: Vendor) => void;
 }) {
   const defaultZoneId = defaultZoneSlug ? zones.find((z) => z.slug === defaultZoneSlug)?.id ?? "" : "";
+  const zonesAlpha = sortZonesByName(zones);
   const [common, setCommon] = useState(initial?.common_name ?? "");
   const [botanical, setBotanical] = useState(initial?.botanical_name ?? "");
   const [catalogId, setCatalogId] = useState<string | null>(initial?.catalog_id ?? null);
@@ -120,7 +122,7 @@ export default function PurchaseForm({
           <label style={label}>Zone</label>
           <select style={field} value={zoneId ?? ""} onChange={(e) => setZoneId(e.target.value)}>
             <option value="">— unassigned —</option>
-            {zones.map((z) => (
+            {zonesAlpha.map((z) => (
               <option key={z.id} value={z.id}>{z.name}</option>
             ))}
           </select>
