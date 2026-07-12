@@ -10,6 +10,10 @@ import {
   classifyImage,
 } from "@/lib/zone-classifier.mjs";
 
+// sharp (native) + a live vision call need the Node runtime, not edge.
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   if (!(await requireEdit())) return NextResponse.json({ error: "locked" }, { status: 401 });
 

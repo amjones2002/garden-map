@@ -25,6 +25,7 @@ export default function AutoTagLog({ zones }: { zones: Zone[] }) {
       .eq("review_status", "confirmed")
       .not("ai_zone_slug", "is", null)
       .order("taken_at", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: false })
       .range(page * PAGE, page * PAGE + PAGE - 1);
     if (zoneFilter) q = q.eq("zone_id", zoneFilter);
     const { data } = await q;
