@@ -78,6 +78,26 @@ describe("matchesFilters", () => {
     expect(matchesFilters(f, { ...EMPTY_FILTERS, text: "salvia" })).toBe(true);
     expect(matchesFilters(f, { ...EMPTY_FILTERS, text: "cactus" })).toBe(false);
   });
+  it("filters by zoneIds (AND across dimensions)", () => {
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, zoneIds: ["z-pool"] })).toBe(true);
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, zoneIds: ["z-front"] })).toBe(false);
+  });
+  it("filters by eraKeys (AND across dimensions)", () => {
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, eraKeys: ["era-1"] })).toBe(true);
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, eraKeys: ["era-0"] })).toBe(false);
+  });
+  it("filters by seasonYears (AND across dimensions)", () => {
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, seasonYears: ["spring-2025"] })).toBe(true);
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, seasonYears: ["summer-2025"] })).toBe(false);
+  });
+  it("filters by milestones (OR within a dimension)", () => {
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, milestones: ["raised_beds", "stock_tank"] })).toBe(true);
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, milestones: ["stock_tank"] })).toBe(false);
+  });
+  it("filters by quality (AND across dimensions)", () => {
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, quality: ["good"] })).toBe(true);
+    expect(matchesFilters(f, { ...EMPTY_FILTERS, quality: ["poor"] })).toBe(false);
+  });
 });
 
 describe("availableFacets", () => {
@@ -87,5 +107,45 @@ describe("availableFacets", () => {
     expect(a.areas).toEqual([{ value: "pool", count: 2 }]);
     expect(a.bloom).toEqual([{ value: "pink", count: 2 }]);
     expect(a.eras.find((e) => e.value === "era-1")?.count).toBe(2);
+  });
+  it("labels zones with their name", () => {
+    const facets = [deriveFacet(photo({}), zones, eras)];
+    const a = availableFacets(facets);
+    const zoneEntry = a.zones.find((z) => z.value === "z-pool");
+    expect(zoneEntry).toBeDefined();
+    expect(zoneEntry?.label).toBe("Pool & Spa");
+  });
+  it("labels seasonYears with prettified format (Season Year)", () => {
+    const facets = [deriveFacet(photo({}), zones, eras)];
+    const a = availableFacets(facets);
+    const seasonEntry = a.seasonYears.find((s) => s.value === "spring-2025");
+    expect(seasonEntry).toBeDefined();
+    expect(seasonEntry?.label).toBe("Spring 2025");
+  });
+  it("sorts areas by count descending", () => {
+    const zonesWithFront = [
+      { id: "z-pool", slug: "pool-spa", name: "Pool & Spa", area: "pool" },
+      { id: "z-front", slug: "front", name: "Front", area: "front" }
+    ] as unknown as Zone[];
+    const facets = [
+      deriveFacet(photo({ id: "a" }), zonesWithFront, eras),
+      deriveFacet(photo({ id: "b" }), zonesWithFront, eras),
+      deriveFacet(photo({ id: "c", zone_id: "z-front" }), zonesWithFront, eras),
+    ];
+    const a = availableFacets(facets);
+    expect(a.areas).toEqual([
+      { value: "pool", count: 2 },
+      { value: "front", count: 1 },
+    ]);
+  });
+  it("sorts bloom by count descending", () => {
+    const facets = [
+      deriveFacet(photo({ id: "a", ai_meta: { ...photo({}).ai_meta, botanical: { bloom_colors: ["pink", "pink"] } } }), zones, eras),
+      deriveFacet(photo({ id: "b", ai_meta: { ...photo({}).ai_meta, botanical: { bloom_colors: ["pink"] } } }), zones, eras),
+      deriveFacet(photo({ id: "c", ai_meta: { ...photo({}).ai_meta, botanical: { bloom_colors: ["blue"] } } }), zones, eras),
+    ];
+    const a = availableFacets(facets);
+    expect(a.bloom[0]).toEqual({ value: "pink", count: 2 });
+    expect(a.bloom[1]).toEqual({ value: "blue", count: 1 });
   });
 });
