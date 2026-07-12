@@ -1,6 +1,10 @@
+"use client";
 import Link from "next/link";
+import { useEditMode } from "@/lib/edit-mode";
 
 export default function Nav() {
+  const { unlocked } = useEditMode();
+  const item: React.CSSProperties = { flex: 1, textAlign: "center", padding: "14px 0", minHeight: 44 };
   return (
     <nav
       style={{
@@ -14,18 +18,11 @@ export default function Nav() {
         zIndex: 50,
       }}
     >
-      <Link
-        href="/"
-        style={{ flex: 1, textAlign: "center", padding: "14px 0", minHeight: 44 }}
-      >
-        Map
-      </Link>
-      <Link
-        href="/tracker"
-        style={{ flex: 1, textAlign: "center", padding: "14px 0", minHeight: 44 }}
-      >
-        Tracker
-      </Link>
+      <Link href="/" style={item}>Map</Link>
+      <Link href="/tracker" style={item}>Tracker</Link>
+      {unlocked && (
+        <Link href="/photos" style={{ ...item, color: "#8e3b5e" }}>Photos</Link>
+      )}
     </nav>
   );
 }
