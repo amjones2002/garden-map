@@ -6,18 +6,7 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 import { useEditMode } from "@/lib/edit-mode";
 import type { Zone, Purchase, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl, sortChronological } from "@/lib/photos";
-
-async function getExifDateTaken(file: File): Promise<string | null> {
-  try {
-    const exifr = await import("exifr");
-    const result = await exifr.parse(file, ["DateTimeOriginal", "CreateDate"]);
-    const d: unknown = result?.DateTimeOriginal ?? result?.CreateDate;
-    if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
-  } catch {
-    // EXIF not available or parse error — fall through
-  }
-  return file.lastModified ? new Date(file.lastModified).toISOString() : null;
-}
+import { getExifDateTaken } from "@/lib/exif";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 

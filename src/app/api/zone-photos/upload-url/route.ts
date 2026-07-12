@@ -11,12 +11,13 @@ export async function GET(req: Request) {
   const filename = searchParams.get("filename");
   const type = searchParams.get("type") ?? "image/jpeg";
 
-  if (!zone_id || !filename) {
-    return NextResponse.json({ error: "zone_id and filename required" }, { status: 400 });
+  if (!filename) {
+    return NextResponse.json({ error: "filename required" }, { status: 400 });
   }
 
   const ext = (filename.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const path = `${zone_id}/${crypto.randomUUID()}.${ext}`;
+  const prefix = zone_id ?? "_inbox";
+  const path = `${prefix}/${crypto.randomUUID()}.${ext}`;
 
   const supabase = getServerSupabase();
   const { data, error } = await supabase.storage
