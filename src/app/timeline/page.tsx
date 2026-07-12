@@ -1,6 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { ERAS } from "@/lib/eras.data";
-import { assignEra, groupBySeason, seasonYear } from "@/lib/eras.mjs";
+import { assignEra, groupBySeason } from "@/lib/eras.mjs";
 import type { Zone, ZonePhoto } from "@/lib/types";
 import TimelineView, { type TimelineEra } from "./TimelineView";
 
