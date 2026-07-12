@@ -21,8 +21,9 @@ async function loadConfirmed(sb) {
   const out = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb.from("zone_photos")
-      .select("storage_path, taken_at, uploaded_at, caption, ai_confidence, ai_meta")
+      .select("id, storage_path, taken_at, uploaded_at, caption, ai_confidence, ai_meta")
       .eq("review_status", "confirmed").order("taken_at", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, from + 999);
     if (error) throw error;
     out.push(...data);
