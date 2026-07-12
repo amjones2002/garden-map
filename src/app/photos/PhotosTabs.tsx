@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { AreaSection } from "@/lib/zones";
 import type { Zone } from "@/lib/types";
 import ReviewTab from "./ReviewTab";
+import UploadTab from "./UploadTab";
 
 type Tab = "upload" | "review";
 
@@ -41,7 +42,7 @@ export default function PhotosTabs({
           To review <span style={{ color: "#8e3b5e" }}>{pendingCount.toLocaleString()}</span>
         </button>
       </div>
-      {tab === "upload" ? <div data-testid="tab-upload" /> : <ReviewTab sections={sections} zones={zones} />}
+      {tab === "upload" ? <UploadTab zones={zones} /> : <ReviewTab sections={sections} zones={zones} />}
     </div>
   );
 }
