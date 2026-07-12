@@ -22,6 +22,7 @@ describe("buildConfirmRow", () => {
 
   it("trims an empty caption to null", () => {
     const r = buildConfirmRow({ zone_id: "z1", storage_path: "s", caption: "   " });
+    expect(r.ok).toBe(true);
     if (r.ok) expect(r.row.caption).toBeNull();
   });
 
@@ -45,6 +46,17 @@ describe("buildConfirmRow", () => {
 
   it("allows a null zone_id (area-only)", () => {
     const r = buildConfirmRow({ zone_id: null, storage_path: "s", area: "front", review_status: "pending" });
+    expect(r.ok).toBe(true);
     if (r.ok) expect(r.row.zone_id).toBeNull();
+  });
+
+  it("preserves falsy-but-defined optional values (is_yard:false, ai_confidence:0)", () => {
+    const r = buildConfirmRow({ storage_path: "s", is_yard: false, ai_confidence: 0 });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect("is_yard" in r.row).toBe(true);
+      expect(r.row.is_yard).toBe(false);
+      expect(r.row.ai_confidence).toBe(0);
+    }
   });
 });
