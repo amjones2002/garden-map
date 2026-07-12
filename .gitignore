@@ -46,3 +46,6 @@ public/survey-page-1.png
 
 # Local downscale cache + batch manifest for the photo import script
 .import-cache/
+
+# Visual brainstorming companion
+.superpowers/
