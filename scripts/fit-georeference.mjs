@@ -19,10 +19,13 @@ async function main() {
     { auth: { persistSession: false } },
   );
 
-  // Trustworthy control points: human-reviewed, has GPS, has a bed.
+  // Trustworthy control points: human-AFFIRMED (confirmed/reassigned, not
+  // rejected), has GPS, has a bed. Reject leaves zone_id pointing at the zone
+  // the photo does NOT belong to, so those rows must be excluded.
   const { data: photos, error: pErr } = await supabase
     .from("zone_photos")
     .select("gps_lat, gps_lng, zone_id")
+    .eq("review_status", "confirmed")
     .not("reviewed_at", "is", null)
     .not("gps_lat", "is", null)
     .not("zone_id", "is", null);
