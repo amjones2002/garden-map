@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { Zone } from "@/lib/types";
 import { sortZonesByName } from "@/lib/zones";
-import { getExifDateTaken } from "@/lib/exif";
+import { getExifDateTaken, getExifGps, type Gps } from "@/lib/exif";
 import { MODEL } from "@/lib/zone-classifier.mjs";
 
 type Classification = {
@@ -24,6 +24,7 @@ type Item = {
   file: File;
   storagePath: string;
   takenAt: string | null;
+  gps: Gps | null;
   status: "classifying" | "ready" | "error" | "saved";
   ai?: Classification;
   chosenZoneId: string;
@@ -56,7 +57,8 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
     for (const file of files) {
       const uid = crypto.randomUUID();
       const takenAt = await getExifDateTaken(file);
-      setItems((prev) => [...prev, { uid, file, storagePath: "", takenAt, status: "classifying", chosenZoneId: "", skip: false }]);
+      const gps = await getExifGps(file);
+      setItems((prev) => [...prev, { uid, file, storagePath: "", takenAt, gps, status: "classifying", chosenZoneId: "", skip: false }]);
       try {
         const { storagePath, ai } = await uploadAndClassify(file);
         setItems((prev) => prev.map((it) => it.uid === uid ? {
@@ -82,6 +84,9 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
         storage_path: it.storagePath,
         caption: it.ai.caption || null,
         taken_at: it.takenAt,
+        gps_lat: it.gps?.lat ?? null,
+        gps_lng: it.gps?.lng ?? null,
+        gps_accuracy: it.gps?.accuracy ?? null,
         area: zone?.area ?? it.ai.area ?? null,
         review_status: "confirmed",
         source: "manual",
