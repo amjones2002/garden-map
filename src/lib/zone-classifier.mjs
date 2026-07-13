@@ -141,3 +141,14 @@ export async function classifyImage(client, { systemPrompt, schema, base64Image,
   const textBlock = msg.content.find((b) => b.type === "text");
   return parseClassification(textBlock ? textBlock.text : "{}");
 }
+
+/** Optional GPS-derived prior appended to the system prompt. Empty string when
+ *  there is no usable hint (keeps the caller branch-free). */
+export function gpsPriorText(hint) {
+  if (!hint || !hint.area) return "";
+  const beds = hint.shortlist && hint.shortlist.length
+    ? ` The nearest beds are: ${hint.shortlist.join(", ")}.`
+    : "";
+  const A = hint.area.toUpperCase();
+  return `\n\nCAMERA GPS PRIOR: The camera's GPS location places this photo in the ${A} area.${beds} Strongly prefer a zone in the ${A} area; override this only if the image clearly and unambiguously shows a different, named area (for example, a photo taken across the yard).`;
+}

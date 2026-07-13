@@ -60,3 +60,25 @@ describe("buildConfirmRow", () => {
     }
   });
 });
+
+describe("buildConfirmRow — GPS", () => {
+  it("includes gps fields when supplied", () => {
+    const r = buildConfirmRow({
+      storage_path: "a/b.jpg", zone_id: "z1",
+      gps_lat: 32.9, gps_lng: -96.7, gps_accuracy: 5,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.row.gps_lat).toBe(32.9);
+      expect(r.row.gps_lng).toBe(-96.7);
+      expect(r.row.gps_accuracy).toBe(5);
+    }
+  });
+  it("omits gps fields when not supplied", () => {
+    const r = buildConfirmRow({ storage_path: "a/b.jpg", zone_id: "z1" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect("gps_lat" in r.row).toBe(false);
+    }
+  });
+});

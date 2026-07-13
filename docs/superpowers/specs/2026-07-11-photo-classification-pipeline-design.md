@@ -173,7 +173,12 @@ path later.
   above; the live path (Phase 2) calls this directly.
 - **Model:** `claude-sonnet-4-6`. Chosen over Haiku for higher one-shot accuracy on
   anchor-based reasoning past transient clutter; over Opus as right-sized for
-  classification. Batch pass ≈ $9 one-time at the 50% discount.
+  classification. **Actual batch cost: $34.29** (~3,000 photos: 15.28M input +
+  1.51M output tokens at the batch rate). The earlier "≈ $9" estimate under-counted
+  because it priced the image only (~1,600 tokens) and missed the ~3,400-token
+  system prompt billed **uncached on every request** — the Batch API shares no prompt
+  cache. A future at-scale re-run should use the live route with `cache_control` on
+  the system prompt instead of batch (see the GPS-anchoring spec's Cost model).
 
 ### Migration script — `scripts/import-photos.mjs`
 

@@ -28,9 +28,10 @@ export async function PATCH(req: Request) {
   const plan = planReviewUpdate({ action, zoneId: zone_id ?? null, zones: (zones ?? []) as Zone[] });
   if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: 400 });
 
+  const patch = { ...plan.patch, reviewed_at: new Date().toISOString() };
   const { error, count } = await supabase
     .from("zone_photos")
-    .update(plan.patch, { count: "exact" })
+    .update(patch, { count: "exact" })
     .in("id", ids);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

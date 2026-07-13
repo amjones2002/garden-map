@@ -1,6 +1,7 @@
 export type Area = "front" | "pool" | "south";
 export type ReviewStatus = "pending" | "confirmed" | "rejected";
 export type PhotoSource = "manual" | "batch_import" | "phone_sync";
+export type ReviewAction = "confirmed_asis" | "reassigned" | "rejected";
 
 export type AiMeta = {
   quality?: "good" | "ok" | "poor";
@@ -86,6 +87,11 @@ export type ZonePhoto = {
   ai_model: string | null;
   is_yard: boolean | null;
   ai_meta: AiMeta;
+  gps_lat: number | null;
+  gps_lng: number | null;
+  gps_accuracy: number | null;
+  reviewed_at: string | null;
+  review_action: ReviewAction | null;
 };
 
 export type PlantCatalog = {

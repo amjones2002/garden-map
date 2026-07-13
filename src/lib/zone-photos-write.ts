@@ -1,4 +1,4 @@
-import type { Area, AiMeta, PhotoSource, ReviewStatus } from "./types";
+import type { Area, AiMeta, PhotoSource, ReviewStatus, ReviewAction } from "./types";
 
 export type ConfirmBody = {
   zone_id?: string | null;
@@ -14,6 +14,10 @@ export type ConfirmBody = {
   ai_model?: string | null;
   is_yard?: boolean | null;
   ai_meta?: AiMeta;
+  gps_lat?: number | null;
+  gps_lng?: number | null;
+  gps_accuracy?: number | null;
+  review_action?: ReviewAction | null;
 };
 
 export type ConfirmResult =
@@ -38,6 +42,7 @@ export function buildConfirmRow(body: ConfirmBody): ConfirmResult {
   const optional: (keyof ConfirmBody)[] = [
     "area", "review_status", "source", "ai_zone_slug", "ai_area",
     "ai_confidence", "ai_model", "is_yard", "ai_meta",
+    "gps_lat", "gps_lng", "gps_accuracy", "review_action",
   ];
   for (const key of optional) {
     if (body[key] !== undefined) row[key] = body[key];

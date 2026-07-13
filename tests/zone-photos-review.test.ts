@@ -10,17 +10,19 @@ const zones = [
 describe("planReviewUpdate", () => {
   it("reject sets rejected, no zone change", () => {
     expect(planReviewUpdate({ action: "reject", zones })).toEqual({
-      ok: true, patch: { review_status: "rejected" },
+      ok: true, patch: { review_status: "rejected", review_action: "rejected" },
     });
   });
   it("confirm with a valid zone sets confirmed + zone + derived area", () => {
     expect(planReviewUpdate({ action: "confirm", zoneId: "z-hell", zones })).toEqual({
-      ok: true, patch: { review_status: "confirmed", zone_id: "z-hell", area: "front" },
+      ok: true,
+      patch: { review_status: "confirmed", zone_id: "z-hell", area: "front", review_action: "confirmed_asis" },
     });
   });
   it("reassign with a valid zone sets confirmed + zone + derived area", () => {
     expect(planReviewUpdate({ action: "reassign", zoneId: "z-pool", zones })).toEqual({
-      ok: true, patch: { review_status: "confirmed", zone_id: "z-pool", area: "pool" },
+      ok: true,
+      patch: { review_status: "confirmed", zone_id: "z-pool", area: "pool", review_action: "reassigned" },
     });
   });
   it("confirm without a zone is an error (guards area-only)", () => {
