@@ -4,7 +4,7 @@ import { areaForZone } from "./zones";
 export type ReviewAction = "confirm" | "reassign" | "reject";
 
 export type ReviewPlan =
-  | { ok: true; patch: { review_status: "confirmed" | "rejected"; zone_id?: string; area?: Area | null } }
+  | { ok: true; patch: { review_status: "confirmed" | "rejected"; zone_id?: string; area?: Area | null; review_action: "confirmed_asis" | "reassigned" | "rejected" } }
   | { ok: false; error: string };
 
 /**
@@ -20,7 +20,7 @@ export function planReviewUpdate(input: {
   const { action, zoneId, zones } = input;
 
   if (action === "reject") {
-    return { ok: true, patch: { review_status: "rejected" } };
+    return { ok: true, patch: { review_status: "rejected", review_action: "rejected" } };
   }
 
   if (action === "confirm" || action === "reassign") {
@@ -29,7 +29,12 @@ export function planReviewUpdate(input: {
     if (!zone) return { ok: false, error: `unknown zone_id: ${zoneId}` };
     return {
       ok: true,
-      patch: { review_status: "confirmed", zone_id: zoneId, area: areaForZone(zoneId, zones) },
+      patch: {
+        review_status: "confirmed",
+        zone_id: zoneId,
+        area: areaForZone(zoneId, zones),
+        review_action: action === "confirm" ? "confirmed_asis" : "reassigned",
+      },
     };
   }
 
