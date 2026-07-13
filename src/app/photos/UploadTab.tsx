@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Zone } from "@/lib/types";
-import { sortZonesByName } from "@/lib/zones";
+import { sortZonesByName, bedsAvailableAt } from "@/lib/zones";
 import { getExifDateTaken, getExifGps, type Gps } from "@/lib/exif";
 import { MODEL } from "@/lib/zone-classifier.mjs";
 
@@ -31,7 +31,7 @@ type Item = {
   skip: boolean;
 };
 
-async function uploadAndClassify(file: File): Promise<{ storagePath: string; ai: Classification }> {
+async function uploadAndClassify(file: File, takenAt: string | null): Promise<{ storagePath: string; ai: Classification }> {
   const urlRes = await fetch(`/api/zone-photos/upload-url?filename=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || "image/jpeg")}`);
   if (!urlRes.ok) throw new Error(await urlRes.text());
   const { signedUrl, path } = (await urlRes.json()) as { signedUrl: string; path: string };
@@ -42,7 +42,7 @@ async function uploadAndClassify(file: File): Promise<{ storagePath: string; ai:
   const clsRes = await fetch("/api/zone-photos/classify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ storage_path: path }),
+    body: JSON.stringify({ storage_path: path, taken_at: takenAt }),
   });
   if (!clsRes.ok) throw new Error(await clsRes.text());
   return { storagePath: path, ai: (await clsRes.json()) as Classification };
@@ -60,7 +60,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
       const gps = await getExifGps(file);
       setItems((prev) => [...prev, { uid, file, storagePath: "", takenAt, gps, status: "classifying", chosenZoneId: "", skip: false }]);
       try {
-        const { storagePath, ai } = await uploadAndClassify(file);
+        const { storagePath, ai } = await uploadAndClassify(file, takenAt);
         setItems((prev) => prev.map((it) => it.uid === uid ? {
           ...it, storagePath, ai, status: "ready" as const,
           chosenZoneId: (ai.zone_slug && zoneIdBySlug.get(ai.zone_slug)) || "",
@@ -137,7 +137,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
             <>
               <select value={it.chosenZoneId} onChange={(e) => setItems((prev) => prev.map((x) => (x.uid === it.uid ? { ...x, chosenZoneId: e.target.value } : x)))} style={{ fontSize: 12, border: "1px solid #cbb994", borderRadius: 8, background: "#fff", padding: "4px 6px" }}>
                 <option value="">choose zone…</option>
-                {zonesAlpha.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                {bedsAvailableAt(zonesAlpha, it.takenAt).map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
               </select>
               {it.skip
                 ? <button onClick={() => setItems((prev) => prev.filter((x) => x.uid !== it.uid))} style={{ fontSize: 12, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Skip</button>
