@@ -1,6 +1,6 @@
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import { fitAffine, polygonCentroid } from "../src/lib/georeference.mjs";
+import { fitAffine, polygonCentroid, filterPlotOutliers } from "../src/lib/georeference.mjs";
 
 config({ path: ".env.local" });
 config();
@@ -36,12 +36,18 @@ async function main() {
       .map((z) => [z.id, polygonCentroid(z.shape)]),
   );
 
-  const points = [];
+  const rawPoints = [];
   for (const p of photos ?? []) {
     const c = centroidById.get(p.zone_id);
     if (!c) continue;
-    points.push({ lat: Number(p.gps_lat), lng: Number(p.gps_lng), x: c.x, y: c.y, zoneId: p.zone_id });
+    rawPoints.push({ lat: Number(p.gps_lat), lng: Number(p.gps_lng), x: c.x, y: c.y, zoneId: p.zone_id });
   }
+
+  // Drop off-site photos / bad GPS fixes before fitting — a single km-scale
+  // outlier would otherwise dominate the least-squares affine fit.
+  const points = filterPlotOutliers(rawPoints);
+  const dropped = rawPoints.length - points.length;
+  if (dropped > 0) console.log(`Dropped ${dropped} off-plot outlier(s) (>100m from median center).`);
 
   const transform = fitAffine(points);
   if (!transform) {

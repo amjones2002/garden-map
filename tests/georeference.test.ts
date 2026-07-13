@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  polygonCentroid, pointInPolygon, fitAffine, applyAffine, resolveGpsHint,
+  polygonCentroid, pointInPolygon, fitAffine, applyAffine, resolveGpsHint, filterPlotOutliers,
 } from "../src/lib/georeference.mjs";
 
 const unitSquare = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
@@ -80,5 +80,40 @@ describe("resolveGpsHint", () => {
     // lng=0.9, lat=0.9 is outside all beds; nearest centroid is south-a.
     const hint = resolveGpsHint(identity, 0.9, 0.9, zones as never);
     expect(hint!.area).toBe("south");
+  });
+});
+
+describe("filterPlotOutliers", () => {
+  // A tight on-plot cluster (~0.25 acre near 32.9335 / -96.6852) plus one
+  // photo taken 6 km away — the kind of off-site fix that would otherwise
+  // dominate the least-squares affine fit.
+  const cluster = [
+    { lat: 32.933500, lng: -96.685200, zoneId: "a" },
+    { lat: 32.933520, lng: -96.685180, zoneId: "b" },
+    { lat: 32.933480, lng: -96.685220, zoneId: "c" },
+    { lat: 32.933510, lng: -96.685190, zoneId: "a" },
+    { lat: 32.933490, lng: -96.685210, zoneId: "b" },
+  ];
+  const offsite = { lat: 32.98980, lng: -96.71610, zoneId: "d" }; // ~6 km north
+
+  it("drops a km-scale outlier and keeps the on-plot cluster", () => {
+    const kept = filterPlotOutliers([...cluster, offsite]);
+    expect(kept).toHaveLength(cluster.length);
+    expect(kept).not.toContainEqual(offsite);
+  });
+
+  it("keeps every point when all are within the radius", () => {
+    expect(filterPlotOutliers(cluster)).toHaveLength(cluster.length);
+  });
+
+  it("respects a custom maxMeters", () => {
+    // A point ~30 m out survives the default 100 m but not a tight 10 m.
+    const near = { lat: 32.93350 + 30 / 111320, lng: -96.68520, zoneId: "e" };
+    expect(filterPlotOutliers([...cluster, near], 100)).toHaveLength(cluster.length + 1);
+    expect(filterPlotOutliers([...cluster, near], 10)).toHaveLength(cluster.length);
+  });
+
+  it("returns an empty array unchanged", () => {
+    expect(filterPlotOutliers([])).toEqual([]);
   });
 });
