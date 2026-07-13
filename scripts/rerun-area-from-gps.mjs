@@ -28,25 +28,36 @@ async function main() {
   if (zErr) throw zErr;
 
   // Non-human-reviewed rows that carry a GPS fix (pending + auto-confirmed).
-  const { data: rows, error: rErr } = await supabase
-    .from("zone_photos")
-    .select("id, area, gps_lat, gps_lng")
-    .is("reviewed_at", null)
-    .not("gps_lat", "is", null);
-  if (rErr) throw rErr;
+  // Paginate: supabase-js caps a single select at 1000 rows, and there are
+  // thousands of unreviewed photos. Updates leave reviewed_at null, so the
+  // filtered set's membership is stable across pages (ordered by id).
+  const PAGE = 1000;
+  let total = 0, filled = 0, reopened = 0, unchanged = 0;
+  for (let from = 0; ; from += PAGE) {
+    const { data: rows, error: rErr } = await supabase
+      .from("zone_photos")
+      .select("id, area, gps_lat, gps_lng")
+      .is("reviewed_at", null)
+      .not("gps_lat", "is", null)
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (rErr) throw rErr;
+    if (!rows || rows.length === 0) break;
 
-  let filled = 0, reopened = 0, unchanged = 0;
-  for (const row of rows ?? []) {
-    const hint = resolveGpsHint(geo, Number(row.gps_lat), Number(row.gps_lng), zones ?? []);
-    const patch = planAreaRerun(row, hint?.area ?? null);
-    if (!patch) { unchanged++; continue; }
-    if (patch.review_status === "pending") reopened++; else filled++;
-    if (dryRun) continue;
-    const { error } = await supabase.from("zone_photos").update(patch).eq("id", row.id);
-    if (error) console.error(`  ! ${row.id}: ${error.message}`);
+    for (const row of rows) {
+      total++;
+      const hint = resolveGpsHint(geo, Number(row.gps_lat), Number(row.gps_lng), zones ?? []);
+      const patch = planAreaRerun(row, hint?.area ?? null);
+      if (!patch) { unchanged++; continue; }
+      if (patch.review_status === "pending") reopened++; else filled++;
+      if (dryRun) continue;
+      const { error } = await supabase.from("zone_photos").update(patch).eq("id", row.id);
+      if (error) console.error(`  ! ${row.id}: ${error.message}`);
+    }
+    if (rows.length < PAGE) break;
   }
 
-  console.log(`rows=${(rows ?? []).length} filled=${filled} reopened=${reopened} unchanged=${unchanged}` +
+  console.log(`rows=${total} filled=${filled} reopened=${reopened} unchanged=${unchanged}` +
     (dryRun ? " (dry-run, no writes)" : ""));
 }
 

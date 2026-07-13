@@ -67,6 +67,27 @@ export function applyAffine(t, lat, lng) {
   return { x: t.a * lng + t.b * lat + t.c, y: t.d * lng + t.e * lat + t.f };
 }
 
+/** Drop gross geographic outliers before fitting: keep only control points
+ *  within `maxMeters` of the median lat/lng. On a 0.25-acre plot every real
+ *  photo sits within ~30 m of center, but an off-site photo or a bad GPS fix
+ *  can land kilometers away and, left in, would dominate the least-squares
+ *  affine fit. Median-centered so the outliers themselves don't skew the
+ *  reference point. Pure; returns a new array. */
+export function filterPlotOutliers(points, maxMeters = 100) {
+  if (points.length === 0) return [];
+  const median = (vals) => {
+    const a = [...vals].sort((x, y) => x - y);
+    return a[Math.floor(a.length / 2)];
+  };
+  const clat = median(points.map((p) => p.lat));
+  const clng = median(points.map((p) => p.lng));
+  const kLat = 111320, kLng = 111320 * Math.cos((clat * Math.PI) / 180);
+  return points.filter((p) => {
+    const dx = (p.lng - clng) * kLng, dy = (p.lat - clat) * kLat;
+    return Math.hypot(dx, dy) <= maxMeters;
+  });
+}
+
 /** Least-squares affine fit lat/lng -> map x/y from control points
  *  [{lat,lng,x,y,zoneId}]. Requires >= MIN_POINTS across >= MIN_ZONES zones.
  *  Returns {a,b,c,d,e,f,n,rms} or null. */
