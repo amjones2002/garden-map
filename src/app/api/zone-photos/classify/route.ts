@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
+import exifr from "exifr";
 import { requireEdit } from "@/lib/require-edit";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { ZONE_PHOTOS_BUCKET } from "@/lib/photos";
+import { resolveGpsHint } from "@/lib/georeference.mjs";
 import {
   buildSystemPrompt,
   buildClassificationSchema,
   classifyImage,
+  gpsPriorText,
 } from "@/lib/zone-classifier.mjs";
 
 // sharp (native) + a live vision call need the Node runtime, not edge.
@@ -41,7 +44,22 @@ export async function POST(req: Request) {
   const { data: zones, error: zErr } = await supabase.from("zones").select("slug, name, area, description");
   if (zErr) return NextResponse.json({ error: zErr.message }, { status: 400 });
 
-  const systemPrompt = buildSystemPrompt(zones ?? []);
+  let gpsHint = null;
+  try {
+    const gps = await exifr.gps(input);
+    if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)) {
+      const { data: geo } = await supabase.from("map_georeference").select("*").eq("id", 1).maybeSingle();
+      if (geo) {
+        const { data: zonesGeo } = await supabase
+          .from("zones").select("slug, area, shape").not("area", "is", null);
+        gpsHint = resolveGpsHint(geo, gps.latitude, gps.longitude, zonesGeo ?? []);
+      }
+    }
+  } catch {
+    // no GPS / no transform — fall back to vision-only
+  }
+
+  const systemPrompt = buildSystemPrompt(zones ?? []) + gpsPriorText(gpsHint);
   const schema = buildClassificationSchema((zones ?? []).map((z: { slug: string }) => z.slug));
 
   try {
