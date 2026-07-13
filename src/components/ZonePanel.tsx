@@ -7,6 +7,7 @@ import { useEditMode } from "@/lib/edit-mode";
 import type { Zone, Purchase, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl, sortChronological } from "@/lib/photos";
 import { getExifDateTaken } from "@/lib/exif";
+import PhotoLightbox from "./PhotoLightbox";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
@@ -221,25 +222,19 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
         </Link>
       </div>
       {lightboxPhoto && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={publicPhotoUrl(SUPABASE_URL, lightboxPhoto.storage_path)}
-            alt={lightboxPhoto.caption ?? ""}
-            style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8 }}
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setLightboxPhoto(null)}
-            aria-label="Close photo"
-            style={{ position: "absolute", top: 16, right: 16, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", fontSize: 24, lineHeight: 1, cursor: "pointer", borderRadius: 4, width: 40, height: 40 }}
-          >
-            ×
-          </button>
-        </div>
+        <PhotoLightbox
+          src={publicPhotoUrl(SUPABASE_URL, lightboxPhoto.storage_path)}
+          alt={lightboxPhoto.caption ?? `${zone.name} photo`}
+          onClose={() => setLightboxPhoto(null)}
+          meta={{
+            caption: lightboxPhoto.caption,
+            takenAt: lightboxPhoto.taken_at,
+            zoneName: zone.name,
+            quality: lightboxPhoto.ai_meta?.quality ?? null,
+            bloomColors: lightboxPhoto.ai_meta?.botanical?.bloom_colors ?? [],
+            reasoning: lightboxPhoto.ai_meta?.reasoning ?? null,
+          }}
+        />
       )}
     </div>
   );

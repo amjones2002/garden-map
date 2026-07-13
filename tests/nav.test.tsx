@@ -9,4 +9,14 @@ describe("Nav", () => {
     expect(screen.getByRole("link", { name: /map/i })).toBeDefined();
     expect(screen.getByRole("link", { name: /tracker/i })).toBeDefined();
   });
+
+  it("renders a public Gallery link", () => {
+    render(<EditModeProvider><Nav /></EditModeProvider>);
+    expect(screen.getByRole("link", { name: /gallery/i })).toBeDefined();
+  });
+
+  it("renders a public Timeline link", () => {
+    render(<EditModeProvider><Nav /></EditModeProvider>);
+    expect(screen.getByRole("link", { name: /timeline/i })).toBeDefined();
+  });
 });
