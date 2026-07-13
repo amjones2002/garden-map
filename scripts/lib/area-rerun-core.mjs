@@ -5,5 +5,5 @@ export function planAreaRerun(row, gpsArea) {
   if (!gpsArea) return null;
   if (row.area === gpsArea) return null;
   if (row.area == null) return { area: gpsArea };
-  return { area: gpsArea, review_status: "pending" };
+  return { area: gpsArea, zone_id: null, review_status: "pending" };
 }

@@ -17,6 +17,10 @@ export async function POST(req: Request) {
   const built = buildConfirmRow(body);
   if (!built.ok) return NextResponse.json({ error: built.error }, { status: 400 });
 
+  if (built.row.review_status === "confirmed") {
+    built.row.reviewed_at = new Date().toISOString();
+  }
+
   const supabase = getServerSupabase();
   const { data, error } = await supabase.from("zone_photos").insert(built.row).select().single();
 

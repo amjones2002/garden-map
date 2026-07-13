@@ -12,6 +12,6 @@ describe("planAreaRerun", () => {
     expect(planAreaRerun({ area: null }, "front")).toEqual({ area: "front" });
   });
   it("re-opens a disagreeing row to pending", () => {
-    expect(planAreaRerun({ area: "front" }, "south")).toEqual({ area: "south", review_status: "pending" });
+    expect(planAreaRerun({ area: "front" }, "south")).toEqual({ area: "south", zone_id: null, review_status: "pending" });
   });
 });

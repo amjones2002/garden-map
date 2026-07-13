@@ -24,24 +24,24 @@ describe("pointInPolygon", () => {
 });
 
 describe("fitAffine", () => {
-  // A known transform: x = 0.5*lng + 100.25, y = -0.5*lat + 16.0 (arbitrary).
+  // A known transform on realistic garden-plot coordinates (~0.0003 deg wide).
   const tx = (lat: number, lng: number) => ({ x: 0.5 * lng + 100.25, y: -0.5 * lat + 16.0 });
   const pts = [
-    { lat: 32.0, lng: -96.0, zoneId: "a" },
-    { lat: 32.1, lng: -96.1, zoneId: "b" },
-    { lat: 32.2, lng: -96.2, zoneId: "c" },
-    { lat: 32.3, lng: -96.0, zoneId: "a" },
-    { lat: 32.4, lng: -96.1, zoneId: "b" },
-    { lat: 32.5, lng: -96.2, zoneId: "c" },
-    { lat: 32.6, lng: -96.3, zoneId: "a" },
-    { lat: 32.7, lng: -96.4, zoneId: "b" },
+    { lat: 32.9000, lng: -96.7000, zoneId: "a" },
+    { lat: 32.9001, lng: -96.7001, zoneId: "b" },
+    { lat: 32.9002, lng: -96.7002, zoneId: "c" },
+    { lat: 32.9003, lng: -96.7000, zoneId: "a" },
+    { lat: 32.9004, lng: -96.7001, zoneId: "b" },
+    { lat: 32.9005, lng: -96.7002, zoneId: "c" },
+    { lat: 32.9006, lng: -96.7003, zoneId: "a" },
+    { lat: 32.9007, lng: -96.7004, zoneId: "b" },
   ].map((p) => ({ ...p, ...tx(p.lat, p.lng) }));
 
   it("recovers the transform from clean control points", () => {
     const t = fitAffine(pts);
     expect(t).not.toBeNull();
-    const q = applyAffine(t!, 32.05, -96.05);
-    const expected = tx(32.05, -96.05);
+    const q = applyAffine(t!, 32.90025, -96.70015);
+    const expected = tx(32.90025, -96.70015);
     expect(q.x).toBeCloseTo(expected.x, 4);
     expect(q.y).toBeCloseTo(expected.y, 4);
     expect(t!.rms).toBeLessThan(1e-6);

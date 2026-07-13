@@ -37,7 +37,7 @@ async function main() {
 
   let filled = 0, reopened = 0, unchanged = 0;
   for (const row of rows ?? []) {
-    const hint = resolveGpsHint(geo, row.gps_lat, row.gps_lng, zones ?? []);
+    const hint = resolveGpsHint(geo, Number(row.gps_lat), Number(row.gps_lng), zones ?? []);
     const patch = planAreaRerun(row, hint?.area ?? null);
     if (!patch) { unchanged++; continue; }
     if (patch.review_status === "pending") reopened++; else filled++;

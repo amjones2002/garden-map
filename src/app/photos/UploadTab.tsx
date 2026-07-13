@@ -76,6 +76,9 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
     const it = items.find((x) => x.uid === uid);
     if (!it || !it.ai || !it.chosenZoneId) return;
     const zone = zones.find((z) => z.id === it.chosenZoneId);
+    const review_action = zone?.slug && it.ai?.zone_slug && zone.slug === it.ai.zone_slug
+      ? "confirmed_asis"
+      : "reassigned";
     const res = await fetch("/api/zone-photos/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -89,6 +92,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
         gps_accuracy: it.gps?.accuracy ?? null,
         area: zone?.area ?? it.ai.area ?? null,
         review_status: "confirmed",
+        review_action,
         source: "manual",
         ai_zone_slug: it.ai.zone_slug,
         ai_area: it.ai.area,

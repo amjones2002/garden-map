@@ -73,10 +73,17 @@ export function applyAffine(t, lat, lng) {
 export function fitAffine(points) {
   const zoneIds = new Set(points.map((p) => p.zoneId));
   if (points.length < MIN_POINTS || zoneIds.size < MIN_ZONES) return null;
+  // Mean-center lat/lng to condition the normal equations: a 0.25-acre plot
+  // spans ~0.0003 deg around lng~-96 / lat~32, so un-centered ATA is
+  // near-singular. Center, fit, then fold the offset back into c/f.
+  const n = points.length;
+  let mlng = 0, mlat = 0;
+  for (const p of points) { mlng += p.lng; mlat += p.lat; }
+  mlng /= n; mlat /= n;
   const ATA = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
   const ATx = [0, 0, 0], ATy = [0, 0, 0];
   for (const p of points) {
-    const row = [p.lng, p.lat, 1];
+    const row = [p.lng - mlng, p.lat - mlat, 1];
     for (let i = 0; i < 3; i++) {
       for (let j = 0; j < 3; j++) ATA[i][j] += row[i] * row[j];
       ATx[i] += row[i] * p.x;
@@ -86,7 +93,12 @@ export function fitAffine(points) {
   const bx = solve3(ATA, ATx);
   const by = solve3(ATA, ATy);
   if (!bx || !by) return null;
-  const t = { a: bx[0], b: bx[1], c: bx[2], d: by[0], e: by[1], f: by[2] };
+  // x = bx0*(lng-mlng) + bx1*(lat-mlat) + bx2
+  //   = bx0*lng + bx1*lat + (bx2 - bx0*mlng - bx1*mlat)
+  const t = {
+    a: bx[0], b: bx[1], c: bx[2] - bx[0] * mlng - bx[1] * mlat,
+    d: by[0], e: by[1], f: by[2] - by[0] * mlng - by[1] * mlat,
+  };
   let se = 0;
   for (const p of points) {
     const q = applyAffine(t, p.lat, p.lng);

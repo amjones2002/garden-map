@@ -40,7 +40,7 @@ async function main() {
   for (const p of photos ?? []) {
     const c = centroidById.get(p.zone_id);
     if (!c) continue;
-    points.push({ lat: p.gps_lat, lng: p.gps_lng, x: c.x, y: c.y, zoneId: p.zone_id });
+    points.push({ lat: Number(p.gps_lat), lng: Number(p.gps_lng), x: c.x, y: c.y, zoneId: p.zone_id });
   }
 
   const transform = fitAffine(points);
