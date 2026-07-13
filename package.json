@@ -12,7 +12,8 @@
     "seed:catalog": "node scripts/seed-catalog.mjs",
     "seed:zones": "node scripts/seed-zones.mjs",
     "import:photos": "node scripts/import-photos.mjs",
-    "backfill:gps": "node scripts/backfill-photo-gps.mjs"
+    "backfill:gps": "node scripts/backfill-photo-gps.mjs",
+    "fit:georeference": "node scripts/fit-georeference.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
