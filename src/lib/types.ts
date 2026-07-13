@@ -27,6 +27,9 @@ export type Zone = {
   updated_at?: string;
   archived_at?: string | null;
   area: Area | null;
+  /** Date the bed was built (calendar date). Null = predates the photo record /
+   *  permanent — never filtered out by the temporal bed filter. */
+  established_at: string | null;
 };
 
 export type Vendor = {

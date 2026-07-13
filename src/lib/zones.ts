@@ -14,6 +14,22 @@ export function areaForZone(zoneId: string | null, zones: Zone[]): Area | null {
   return zones.find((z) => z.id === zoneId)?.area ?? null;
 }
 
+/**
+ * Beds that already existed when a photo was taken. A zone is available when its
+ * `established_at` is null (permanent / predates the photo record) or on/before
+ * the photo's `taken_at` calendar date. A null `takenAt` (undatable photo) keeps
+ * every zone — we don't hide the answer when we can't date the photo. Input order
+ * is preserved.
+ */
+export function bedsAvailableAt<T extends { established_at: string | null }>(
+  zones: T[],
+  takenAt: string | null,
+): T[] {
+  if (!takenAt) return zones;
+  const takenDay = takenAt.slice(0, 10);
+  return zones.filter((z) => z.established_at == null || z.established_at.slice(0, 10) <= takenDay);
+}
+
 export type ZoneGroup = {
   zoneSlug: string | null;
   zoneName: string;
