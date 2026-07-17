@@ -10,6 +10,7 @@ import { ERAS } from "@/lib/eras.data";
 import { AREA_LABELS } from "@/lib/zones";
 import { publicPhotoUrl } from "@/lib/photos";
 import PhotoLightbox from "@/components/PhotoLightbox";
+import { useEditMode } from "@/lib/edit-mode";
 import type { Area } from "@/lib/types";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -25,11 +26,20 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 }
 
 export default function GalleryBrowser({ facets }: { facets: PhotoFacet[] }) {
+  const { unlocked } = useEditMode();
+  const [allFacets, setAllFacets] = useState<PhotoFacet[]>(facets);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [open, setOpen] = useState<PhotoFacet | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const available = useMemo(() => availableFacets(facets), [facets]);
-  const shown = useMemo(() => facets.filter((f) => matchesFilters(f, filters)), [facets, filters]);
+  const available = useMemo(() => availableFacets(allFacets), [allFacets]);
+  const shown = useMemo(() => allFacets.filter((f) => matchesFilters(f, filters)), [allFacets, filters]);
+
+  const deletePhoto = async (id: string) => {
+    const res = await fetch(`/api/zone-photos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await res.text());
+    setAllFacets((prev) => prev.filter((f) => f.id !== id));
+    setOpen(null);
+  };
 
   // key is any array-valued Filters field; value toggles membership.
   const toggle = (key: Exclude<keyof Filters, "text">, value: string) =>
@@ -158,6 +168,7 @@ export default function GalleryBrowser({ facets }: { facets: PhotoFacet[] }) {
           src={publicPhotoUrl(SUPABASE_URL, open.storagePath)}
           alt={open.caption ?? "yard photo"}
           onClose={() => setOpen(null)}
+          onDelete={unlocked ? () => deletePhoto(open.id) : undefined}
           meta={{
             caption: open.caption, takenAt: open.takenAt, zoneName: open.zoneName,
             eraTitle: open.eraKey ? eraLabel(open.eraKey) : null,

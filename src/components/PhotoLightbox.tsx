@@ -1,9 +1,33 @@
 "use client";
+import { useState } from "react";
 import PhotoMeta, { type PhotoMetaProps } from "./PhotoMeta";
 
-export type PhotoLightboxProps = { src: string; alt: string; meta: PhotoMetaProps; onClose: () => void };
+export type PhotoLightboxProps = {
+  src: string;
+  alt: string;
+  meta: PhotoMetaProps;
+  onClose: () => void;
+  /** When provided, a delete control is shown (edit mode). Should remove the photo and close. */
+  onDelete?: () => Promise<void>;
+};
 
-export default function PhotoLightbox({ src, alt, meta, onClose }: PhotoLightboxProps) {
+export default function PhotoLightbox({ src, alt, meta, onClose, onDelete }: PhotoLightboxProps) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
+
+  const runDelete = async () => {
+    if (!onDelete) return;
+    setBusy(true);
+    setErr(false);
+    try {
+      await onDelete();
+    } catch {
+      setErr(true);
+      setBusy(false);
+    }
+  };
+
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}
@@ -17,6 +41,37 @@ export default function PhotoLightbox({ src, alt, meta, onClose }: PhotoLightbox
         <img src={src} alt={alt} style={{ flex: "1 1 320px", minWidth: 260, maxHeight: "92vh", objectFit: "contain", background: "#000", display: "block" }} />
         <div style={{ flex: "1 1 240px", maxWidth: 340, overflowY: "auto", maxHeight: "92vh" }}>
           <PhotoMeta {...meta} />
+          {onDelete && (
+            <div style={{ padding: "0 16px 16px" }}>
+              {confirming ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, color: "#5a5340" }}>Delete this photo?</span>
+                  <button
+                    onClick={runDelete}
+                    disabled={busy}
+                    style={{ background: "#8e3b5e", border: "none", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer" }}
+                  >
+                    {busy ? "Deleting…" : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => setConfirming(false)}
+                    disabled={busy}
+                    style={{ background: "#efe7d3", border: "1px solid #cbb994", color: "#5a5340", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirming(true)}
+                  style={{ background: "transparent", border: "1px solid #8e3b5e", color: "#8e3b5e", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer" }}
+                >
+                  Delete photo
+                </button>
+              )}
+              {err && <p style={{ color: "#8e3b5e", fontSize: 12, margin: "8px 0 0" }}>Delete failed — try again.</p>}
+            </div>
+          )}
         </div>
       </div>
       <button
