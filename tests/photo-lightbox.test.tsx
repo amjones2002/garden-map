@@ -17,4 +17,20 @@ describe("PhotoLightbox", () => {
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("shows no delete control when onDelete is absent", () => {
+    render(<PhotoLightbox src="https://x/y.jpg" alt="a" meta={meta} onClose={() => {}} />);
+    expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+  });
+
+  it("confirms before calling onDelete", async () => {
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    render(<PhotoLightbox src="https://x/y.jpg" alt="a" meta={meta} onClose={() => {}} onDelete={onDelete} />);
+    // First click reveals confirmation, does not delete yet.
+    fireEvent.click(screen.getByRole("button", { name: /delete photo/i }));
+    expect(onDelete).not.toHaveBeenCalled();
+    // Confirm.
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
 });
