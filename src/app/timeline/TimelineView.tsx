@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import type { EraContent } from "@/lib/eras.data";
 import { MILESTONES } from "@/lib/eras.mjs";
@@ -17,6 +17,13 @@ export type TimelineEra = EraContent & { seasons: Season[] };
 
 export default function TimelineView({ eras }: { eras: TimelineEra[] }) {
   const [open, setOpen] = useState<{ era: TimelineEra; p: TimelinePhoto } | null>(null);
+
+  // Flat, ordered list of every photo (with its era) so the lightbox can step
+  // across season and era boundaries.
+  const flat = useMemo(
+    () => eras.flatMap((era) => era.seasons.flatMap((s) => s.photos.map((p) => ({ era, p })))),
+    [eras],
+  );
 
   if (eras.length === 0) {
     return <p style={{ padding: 24, color: "#8a8268" }}>The timeline hasn’t been generated yet. Run <code>npm run gen:eras</code>.</p>;
@@ -66,14 +73,19 @@ export default function TimelineView({ eras }: { eras: TimelineEra[] }) {
         ))}
       </div>
 
-      {open && (
+      {open && (() => {
+        const idx = flat.findIndex((x) => x.p.id === open.p.id);
+        return (
         <PhotoLightbox
           src={publicPhotoUrl(SUPABASE_URL, open.p.storagePath)}
           alt={open.p.caption ?? "yard photo"}
           onClose={() => setOpen(null)}
+          onPrev={idx > 0 ? () => setOpen(flat[idx - 1]) : undefined}
+          onNext={idx >= 0 && idx < flat.length - 1 ? () => setOpen(flat[idx + 1]) : undefined}
           meta={{ caption: open.p.caption, takenAt: open.p.takenAt, zoneName: open.p.zoneName, eraTitle: open.era.title, quality: open.p.quality, bloomColors: open.p.bloomColors, reasoning: open.p.reasoning }}
         />
-      )}
+        );
+      })()}
     </div>
   );
 }

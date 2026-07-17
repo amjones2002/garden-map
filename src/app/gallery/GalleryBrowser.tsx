@@ -163,19 +163,24 @@ export default function GalleryBrowser({ facets }: { facets: PhotoFacet[] }) {
         ))}
       </div>
 
-      {open && (
+      {open && (() => {
+        const idx = shown.findIndex((f) => f.id === open.id);
+        return (
         <PhotoLightbox
           src={publicPhotoUrl(SUPABASE_URL, open.storagePath)}
           alt={open.caption ?? "yard photo"}
           onClose={() => setOpen(null)}
           onDelete={unlocked ? () => deletePhoto(open.id) : undefined}
+          onPrev={idx > 0 ? () => setOpen(shown[idx - 1]) : undefined}
+          onNext={idx >= 0 && idx < shown.length - 1 ? () => setOpen(shown[idx + 1]) : undefined}
           meta={{
             caption: open.caption, takenAt: open.takenAt, zoneName: open.zoneName,
             eraTitle: open.eraKey ? eraLabel(open.eraKey) : null,
             quality: open.quality, bloomColors: open.bloomColors, reasoning: open.reasoning,
           }}
         />
-      )}
+        );
+      })()}
     </div>
   );
 }

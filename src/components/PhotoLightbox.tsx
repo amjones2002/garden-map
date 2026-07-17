@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PhotoMeta, { type PhotoMetaProps } from "./PhotoMeta";
 
 export type PhotoLightboxProps = {
@@ -9,12 +9,26 @@ export type PhotoLightboxProps = {
   onClose: () => void;
   /** When provided, a delete control is shown (edit mode). Should remove the photo and close. */
   onDelete?: () => Promise<void>;
+  /** When provided, a left arrow steps to the previous photo. */
+  onPrev?: () => void;
+  /** When provided, a right arrow steps to the next photo. */
+  onNext?: () => void;
 };
 
-export default function PhotoLightbox({ src, alt, meta, onClose, onDelete }: PhotoLightboxProps) {
+export default function PhotoLightbox({ src, alt, meta, onClose, onDelete, onPrev, onNext }: PhotoLightboxProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") onPrev?.();
+      else if (e.key === "ArrowRight") onNext?.();
+      else if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onPrev, onNext, onClose]);
 
   const runDelete = async () => {
     if (!onDelete) return;
@@ -74,6 +88,30 @@ export default function PhotoLightbox({ src, alt, meta, onClose, onDelete }: Pho
           )}
         </div>
       </div>
+      {onPrev && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
+          aria-label="Previous photo"
+          style={{ position: "absolute", top: "50%", left: 16, transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", borderRadius: "50%", width: 48, height: 48 }}
+        >
+          ‹
+        </button>
+      )}
+      {onNext && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          aria-label="Next photo"
+          style={{ position: "absolute", top: "50%", right: 16, transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", borderRadius: "50%", width: 48, height: 48 }}
+        >
+          ›
+        </button>
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation();

@@ -33,4 +33,30 @@ describe("PhotoLightbox", () => {
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
     expect(onDelete).toHaveBeenCalledOnce();
   });
+
+  it("shows no prev/next arrows when handlers are absent", () => {
+    render(<PhotoLightbox src="https://x/y.jpg" alt="a" meta={meta} onClose={() => {}} />);
+    expect(screen.queryByRole("button", { name: /previous photo/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /next photo/i })).not.toBeInTheDocument();
+  });
+
+  it("steps through photos with the arrow buttons", () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    render(<PhotoLightbox src="https://x/y.jpg" alt="a" meta={meta} onClose={() => {}} onPrev={onPrev} onNext={onNext} />);
+    fireEvent.click(screen.getByRole("button", { name: /previous photo/i }));
+    expect(onPrev).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: /next photo/i }));
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+
+  it("steps through photos with the arrow keys", () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    render(<PhotoLightbox src="https://x/y.jpg" alt="a" meta={meta} onClose={() => {}} onPrev={onPrev} onNext={onNext} />);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(onPrev).toHaveBeenCalledOnce();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(onNext).toHaveBeenCalledOnce();
+  });
 });
