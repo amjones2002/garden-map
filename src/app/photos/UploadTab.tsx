@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import type { Zone } from "@/lib/types";
 import { sortZonesByName, bedsAvailableAt } from "@/lib/zones";
 import { getExifDateTaken, getExifGps, type Gps } from "@/lib/exif";
@@ -22,6 +23,7 @@ type Classification = {
 type Item = {
   uid: string;
   file: File;
+  previewUrl: string;
   storagePath: string;
   takenAt: string | null;
   gps: Gps | null;
@@ -53,12 +55,26 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
   const zoneIdBySlug = new Map(zones.map((z) => [z.slug, z.id]));
   const zonesAlpha = sortZonesByName(zones);
 
+  // Track every object URL we create so we can release them on unmount.
+  const previewUrls = useRef<string[]>([]);
+  useEffect(() => () => previewUrls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  function removeItem(uid: string) {
+    setItems((prev) => {
+      const it = prev.find((x) => x.uid === uid);
+      if (it) URL.revokeObjectURL(it.previewUrl);
+      return prev.filter((x) => x.uid !== uid);
+    });
+  }
+
   async function onFiles(files: File[]) {
     for (const file of files) {
       const uid = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
+      previewUrls.current.push(previewUrl);
       const takenAt = await getExifDateTaken(file);
       const gps = await getExifGps(file);
-      setItems((prev) => [...prev, { uid, file, storagePath: "", takenAt, gps, status: "classifying", chosenZoneId: "", skip: false }]);
+      setItems((prev) => [...prev, { uid, file, previewUrl, storagePath: "", takenAt, gps, status: "classifying", chosenZoneId: "", skip: false }]);
       try {
         const { storagePath, ai } = await uploadAndClassify(file, takenAt);
         setItems((prev) => prev.map((it) => it.uid === uid ? {
@@ -126,7 +142,15 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
 
       {items.map((it) => (
         <div key={it.uid} style={{ display: "flex", gap: 10, alignItems: "center", background: "#f5efe0", border: `1px solid ${it.skip ? "#d8b58c" : "#cbb994"}`, borderRadius: 10, padding: 8, marginBottom: 6, opacity: it.status === "saved" ? 0.5 : 1 }}>
-          <div style={{ flex: 1, fontSize: 12 }}>
+          <Image
+            src={it.previewUrl}
+            alt={it.file.name}
+            width={56}
+            height={56}
+            unoptimized
+            style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1px solid #cbb994", flexShrink: 0, display: "block" }}
+          />
+          <div style={{ flex: 1, fontSize: 12, minWidth: 0 }}>
             <div style={{ color: "#8a8268" }}>{it.file.name}{it.takenAt ? ` · ${it.takenAt.slice(0, 10)}` : ""}</div>
             {it.status === "classifying" && <div style={{ color: "#7a6a44" }}>Classifying…</div>}
             {it.status === "error" && <div style={{ color: "#8e3b5e" }}>Classify failed — pick a zone manually</div>}
@@ -140,7 +164,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
                 {bedsAvailableAt(zonesAlpha, it.takenAt).map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
               </select>
               {it.skip
-                ? <button onClick={() => setItems((prev) => prev.filter((x) => x.uid !== it.uid))} style={{ fontSize: 12, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Skip</button>
+                ? <button onClick={() => removeItem(it.uid)} style={{ fontSize: 12, border: "1px solid #cbb994", background: "#e3dac3", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Skip</button>
                 : <button onClick={() => saveOne(it.uid)} disabled={!it.chosenZoneId} style={{ fontSize: 12, border: "none", background: "#8e3b5e", color: "#fff", borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>Save</button>}
             </>
           )}
