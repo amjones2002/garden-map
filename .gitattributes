@@ -1,0 +1,8 @@
+# Source-data exports — third-party reference material, not application code.
+# These directories hold sanctioned data dumps (saved WildflowersOrg ecoregion
+# HTML pages and the NPSOT plant list) that the seed scripts parse. Mark them
+# vendored so GitHub Linguist excludes them from the repo's language statistics,
+# letting the language bar reflect the actual TypeScript/React app rather than
+# ~7 MB of saved HTML.
+WildflowersOrg/** linguist-vendored
+NPSOT/**          linguist-vendored
