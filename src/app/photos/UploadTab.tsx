@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { Zone } from "@/lib/types";
 import { sortZonesByName, bedsAvailableAt } from "@/lib/zones";
 import { getExifDateTaken, getExifGps, type Gps } from "@/lib/exif";
+import { downscaleForUpload } from "@/lib/image-downscale";
 import { MODEL } from "@/lib/zone-classifier.mjs";
 
 type Classification = {
@@ -33,20 +34,40 @@ type Item = {
   skip: boolean;
 };
 
-async function uploadAndClassify(file: File, takenAt: string | null): Promise<{ storagePath: string; ai: Classification }> {
-  const urlRes = await fetch(`/api/zone-photos/upload-url?filename=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || "image/jpeg")}`);
+/** Best-effort cleanup of an object uploaded before the user chose a zone. */
+function discardUpload(storagePath: string) {
+  if (!storagePath) return;
+  void fetch(`/api/zone-photos?path=${encodeURIComponent(storagePath)}`, { method: "DELETE" })
+    .catch(() => {}); // fire and forget — a failed cleanup must not block the UI
+}
+
+async function uploadAndClassify(file: File, takenAt: string | null, gps: Gps | null): Promise<{ storagePath: string; ai: Classification }> {
+  // Store a display copy, never the original: a phone photo is 2-5 MB and the
+  // bucket is a display cache, not an archive. EXIF (and with it GPS) is read
+  // from the original by the caller, because canvas encoding drops it.
+  const upload = await downscaleForUpload(file);
+
+  const urlRes = await fetch(`/api/zone-photos/upload-url?filename=${encodeURIComponent(upload.name)}&type=${encodeURIComponent(upload.type || "image/jpeg")}`);
   if (!urlRes.ok) throw new Error(await urlRes.text());
   const { signedUrl, path } = (await urlRes.json()) as { signedUrl: string; path: string };
 
-  const put = await fetch(signedUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+  const put = await fetch(signedUrl, { method: "PUT", body: upload, headers: { "Content-Type": upload.type || "image/jpeg" } });
   if (!put.ok) throw new Error(`storage upload failed: ${put.status}`);
 
   const clsRes = await fetch("/api/zone-photos/classify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ storage_path: path, taken_at: takenAt }),
+    body: JSON.stringify({
+      storage_path: path,
+      taken_at: takenAt,
+      gps_lat: gps?.lat ?? null,
+      gps_lng: gps?.lng ?? null,
+    }),
   });
-  if (!clsRes.ok) throw new Error(await clsRes.text());
+  if (!clsRes.ok) {
+    discardUpload(path); // classify failed — don't strand the object
+    throw new Error(await clsRes.text());
+  }
   return { storagePath: path, ai: (await clsRes.json()) as Classification };
 }
 
@@ -62,7 +83,12 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
   function removeItem(uid: string) {
     setItems((prev) => {
       const it = prev.find((x) => x.uid === uid);
-      if (it) URL.revokeObjectURL(it.previewUrl);
+      if (it) {
+        URL.revokeObjectURL(it.previewUrl);
+        // Skipping drops an object that was already uploaded, and no row will
+        // ever point at it. Delete it now or it leaks into the bucket forever.
+        if (it.status !== "saved") discardUpload(it.storagePath);
+      }
       return prev.filter((x) => x.uid !== uid);
     });
   }
@@ -76,7 +102,7 @@ export default function UploadTab({ zones }: { zones: Zone[] }) {
       const gps = await getExifGps(file);
       setItems((prev) => [...prev, { uid, file, previewUrl, storagePath: "", takenAt, gps, status: "classifying", chosenZoneId: "", skip: false }]);
       try {
-        const { storagePath, ai } = await uploadAndClassify(file, takenAt);
+        const { storagePath, ai } = await uploadAndClassify(file, takenAt, gps);
         setItems((prev) => prev.map((it) => it.uid === uid ? {
           ...it, storagePath, ai, status: "ready" as const,
           chosenZoneId: (ai.zone_slug && zoneIdBySlug.get(ai.zone_slug)) || "",

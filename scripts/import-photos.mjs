@@ -13,7 +13,9 @@ import {
   walkImages, extractCaptureDate, downscale, sourceRefFor,
 } from "./lib/photo-file.mjs";
 import { buildImportRecord, THRESHOLD_DEFAULT } from "./lib/import-core.mjs";
-const ZONE_PHOTOS_BUCKET = "zone-photos"; // mirrors src/lib/photos.ts
+import {
+  ZONE_PHOTOS_BUCKET, DISPLAY_MAX_EDGE, DISPLAY_QUALITY_PCT, DISPLAY_MIME, DISPLAY_EXT,
+} from "../src/lib/image-spec.mjs";
 
 config({ path: ".env.local" });
 config();
@@ -22,7 +24,8 @@ const CACHE_DIR = ".import-cache";
 const DISPLAY_DIR = join(CACHE_DIR, "display");
 const MANIFEST = join(CACHE_DIR, "manifest.json");
 const API_MAX_EDGE = 1568, API_QUALITY = 80;
-const STORE_MAX_EDGE = 1280, STORE_QUALITY = 75;
+// Display-copy shape is shared with the browser uploader — see src/lib/image-spec.mjs.
+const STORE_MAX_EDGE = DISPLAY_MAX_EDGE, STORE_QUALITY = DISPLAY_QUALITY_PCT;
 // Batches API caps a batch at 256 MB / 100k requests. Chunk well under that.
 const MAX_BATCH_BYTES = 180 * 1024 * 1024;
 const MAX_BATCH_REQUESTS = 1000;
@@ -106,11 +109,11 @@ async function submit(flags) {
     try {
       const buffer = await readFile(file);
       const { date, source } = await extractCaptureDate(file, buffer);
-      const displayBuf = await downscale(buffer, { maxEdge: STORE_MAX_EDGE, quality: STORE_QUALITY });
+      const displayBuf = await downscale(buffer, { maxEdge: STORE_MAX_EDGE, quality: STORE_QUALITY, format: "webp" });
       const apiBuf = await downscale(buffer, { maxEdge: API_MAX_EDGE, quality: API_QUALITY });
 
       const key = crypto.createHash("sha1").update(sourceRef).digest("hex");
-      const displayPath = join(DISPLAY_DIR, `${key}.jpg`);
+      const displayPath = join(DISPLAY_DIR, `${key}.${DISPLAY_EXT}`);
       await writeFile(displayPath, displayBuf);
 
       const customId = key.slice(0, 64);
@@ -159,7 +162,7 @@ async function rebuild(flags) {
       const buffer = await readFile(file);
       const { date, source } = await extractCaptureDate(file, buffer);
       const key = crypto.createHash("sha1").update(sourceRef).digest("hex");
-      manifest[key.slice(0, 64)] = { sourceRef, captureDate: date.toISOString(), captureSource: source, displayPath: join(DISPLAY_DIR, `${key}.jpg`) };
+      manifest[key.slice(0, 64)] = { sourceRef, captureDate: date.toISOString(), captureSource: source, displayPath: join(DISPLAY_DIR, `${key}.${DISPLAY_EXT}`) };
       if (++n % 500 === 0) console.log(`rebuilt ${n}...`);
     } catch (e) {
       skipped++;
@@ -221,10 +224,10 @@ async function collect(flags) {
     // Resolve zone_id + storage path, upload the display copy, insert the row.
     const zoneId = rec.row.ai_zone_slug ? slugToId.get(rec.row.ai_zone_slug) ?? null : null;
     const folder = zoneId ?? `area-${rec.row.area ?? "unsorted"}`;
-    const storagePath = `${folder}/${crypto.randomUUID()}.jpg`;
+    const storagePath = `${folder}/${crypto.randomUUID()}.${DISPLAY_EXT}`;
     const displayBuf = await readFile(entry.displayPath);
 
-    const up = await supabase.storage.from(ZONE_PHOTOS_BUCKET).upload(storagePath, displayBuf, { contentType: "image/jpeg", upsert: false });
+    const up = await supabase.storage.from(ZONE_PHOTOS_BUCKET).upload(storagePath, displayBuf, { contentType: DISPLAY_MIME, upsert: false });
     if (up.error) { console.log(`upload failed: ${entry.sourceRef} — ${up.error.message}`); counts.errored++; continue; }
 
     const { error } = await supabase.from("zone_photos").insert({ ...rec.row, zone_id: zoneId, storage_path: storagePath });
