@@ -45,13 +45,16 @@ export async function extractCaptureDate(filePath, buffer) {
   return { date: st.mtime, source: "mtime" };
 }
 
-/** Resize to maxEdge (long edge), auto-orient, strip EXIF, encode JPEG. */
-export async function downscale(buffer, { maxEdge, quality }) {
-  return sharp(buffer)
+/**
+ * Resize to maxEdge (long edge), auto-orient, strip EXIF, encode.
+ * `format` is "jpeg" (default, used for the Claude vision copy) or "webp"
+ * (used for stored display copies — see src/lib/image-spec.mjs).
+ */
+export async function downscale(buffer, { maxEdge, quality, format = "jpeg" }) {
+  const pipeline = sharp(buffer)
     .rotate() // apply EXIF orientation, then metadata is dropped on output
-    .resize({ width: maxEdge, height: maxEdge, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality })
-    .toBuffer();
+    .resize({ width: maxEdge, height: maxEdge, fit: "inside", withoutEnlargement: true });
+  return (format === "webp" ? pipeline.webp({ quality }) : pipeline.jpeg({ quality })).toBuffer();
 }
 
 /** Stable per-photo identifier: POSIX relative path from the import root. */

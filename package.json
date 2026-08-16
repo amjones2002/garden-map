@@ -15,7 +15,8 @@
     "backfill:gps": "node scripts/backfill-photo-gps.mjs",
     "fit:georeference": "node scripts/fit-georeference.mjs",
     "rerun:area": "node scripts/rerun-area-from-gps.mjs",
-    "gen:eras": "node scripts/generate-eras.mjs"
+    "gen:eras": "node scripts/generate-eras.mjs",
+    "reclaim:storage": "node scripts/reclaim-storage.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

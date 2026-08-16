@@ -7,6 +7,7 @@ import { useEditMode } from "@/lib/edit-mode";
 import type { Zone, Purchase, ZonePhoto } from "@/lib/types";
 import { publicPhotoUrl, sortChronological } from "@/lib/photos";
 import { getExifDateTaken } from "@/lib/exif";
+import { downscaleForUpload } from "@/lib/image-downscale";
 import PhotoLightbox from "./PhotoLightbox";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -64,16 +65,21 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
     await Promise.all(
       files.map(async (file) => {
         try {
+          // EXIF must come off the original — canvas encoding drops it.
+          const takenAt = await getExifDateTaken(file);
+          // Store a display copy, not the 2-5 MB original the phone handed us.
+          const upload = await downscaleForUpload(file);
+
           const urlRes = await fetch(
-            `/api/zone-photos/upload-url?zone_id=${encodeURIComponent(zone.id)}&filename=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || "image/jpeg")}`,
+            `/api/zone-photos/upload-url?zone_id=${encodeURIComponent(zone.id)}&filename=${encodeURIComponent(upload.name)}&type=${encodeURIComponent(upload.type || "image/jpeg")}`,
           );
           if (!urlRes.ok) throw new Error(await urlRes.text());
           const { signedUrl, path } = (await urlRes.json()) as { signedUrl: string; path: string };
 
           const putRes = await fetch(signedUrl, {
             method: "PUT",
-            body: file,
-            headers: { "Content-Type": file.type || "image/jpeg" },
+            body: upload,
+            headers: { "Content-Type": upload.type || "image/jpeg" },
           });
           if (!putRes.ok) throw new Error(`Storage upload failed: ${putRes.status}`);
 
@@ -83,7 +89,7 @@ export default function ZonePanel({ zone, onClose }: { zone: Zone; onClose: () =
             body: JSON.stringify({
               zone_id: zone.id,
               storage_path: path,
-              taken_at: await getExifDateTaken(file),
+              taken_at: takenAt,
             }),
           });
           if (!confirmRes.ok) throw new Error(await confirmRes.text());

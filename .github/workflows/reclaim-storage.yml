@@ -1,0 +1,70 @@
+name: Reclaim photo storage
+
+# Manual-only. Lets the zone-photos bucket be audited and compacted from a phone
+# via the GitHub UI, since the script needs the service-role key and there is
+# otherwise no way to run it without a terminal.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "audit = report only (safe). apply = delete and rewrite."
+        type: choice
+        options:
+          - audit
+          - apply
+        default: audit
+        required: true
+      shrink:
+        description: "Also rewrite oversized source='manual' originals to the display spec"
+        type: boolean
+        default: true
+        required: false
+
+# The reclaim script only talks to Supabase; it needs nothing from the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: reclaim-storage
+  cancel-in-progress: false
+
+jobs:
+  reclaim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Reclaim
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Missing repository secrets NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY."
+            exit 1
+          fi
+
+          args=""
+          [ "${{ inputs.mode }}" = "apply" ] && args="$args --apply"
+          [ "${{ inputs.shrink }}" = "true" ] && args="$args --shrink"
+          echo "Running: node scripts/reclaim-storage.mjs$args"
+
+          # Tee to the job summary so the result is readable on a phone without
+          # scrolling the raw log.
+          set -o pipefail
+          node scripts/reclaim-storage.mjs $args 2>&1 | tee /tmp/reclaim.log
+
+          {
+            echo "### Reclaim (${{ inputs.mode }}${{ inputs.shrink && ', shrink' || '' }})"
+            echo ""
+            echo '```'
+            cat /tmp/reclaim.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

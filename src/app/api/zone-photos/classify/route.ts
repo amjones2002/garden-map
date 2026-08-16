@@ -21,9 +21,15 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   if (!(await requireEdit())) return NextResponse.json({ error: "locked" }, { status: 401 });
 
-  let body: { storage_path?: string; taken_at?: string | null };
+  type ClassifyBody = {
+    storage_path?: string;
+    taken_at?: string | null;
+    gps_lat?: number | null;
+    gps_lng?: number | null;
+  };
+  let body: ClassifyBody;
   try {
-    body = (await req.json()) as { storage_path?: string; taken_at?: string | null };
+    body = (await req.json()) as ClassifyBody;
   } catch {
     return NextResponse.json({ error: "expected JSON body" }, { status: 400 });
   }
@@ -53,7 +59,14 @@ export async function POST(req: Request) {
 
   let gpsHint = null;
   try {
-    const gps = await exifr.gps(input);
+    // The browser uploads a downscaled copy, and canvas encoding strips EXIF, so
+    // the client reads GPS off the *original* file and sends it here. Prefer that
+    // and fall back to the object's own EXIF (batch-imported and legacy objects).
+    const fromBody =
+      Number.isFinite(body.gps_lat) && Number.isFinite(body.gps_lng)
+        ? { latitude: Number(body.gps_lat), longitude: Number(body.gps_lng) }
+        : null;
+    const gps = fromBody ?? (await exifr.gps(input));
     if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)) {
       const { data: geo } = await supabase.from("map_georeference").select("*").eq("id", 1).maybeSingle();
       if (geo) {

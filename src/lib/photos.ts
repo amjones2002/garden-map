@@ -1,4 +1,5 @@
-export const ZONE_PHOTOS_BUCKET = "zone-photos";
+export { ZONE_PHOTOS_BUCKET } from "./image-spec.mjs";
+import { ZONE_PHOTOS_BUCKET } from "./image-spec.mjs";
 
 /** Public URL for an object in the public zone-photos bucket. */
 export function publicPhotoUrl(supabaseUrl: string, storagePath: string): string {
