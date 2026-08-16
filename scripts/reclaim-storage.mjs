@@ -23,6 +23,9 @@
  *   node scripts/reclaim-storage.mjs                     # audit only
  *   node scripts/reclaim-storage.mjs --apply             # orphans + rejected
  *   node scripts/reclaim-storage.mjs --apply --shrink    # + oversized originals
+ *
+ * --apply refuses to run if orphans exceed 20% of the bucket, which signals
+ * broken path matching rather than genuine orphans; --force overrides it.
  */
 import { config } from "dotenv";
 import crypto from "node:crypto";
@@ -35,6 +38,7 @@ import {
   DISPLAY_MIME,
   DISPLAY_EXT,
 } from "../src/lib/image-spec.mjs";
+import { checkOrphanShare } from "./lib/reclaim-core.mjs";
 
 config({ path: ".env.local" });
 config();
@@ -44,11 +48,12 @@ const LIST_PAGE = 100; // storage list() caps at 100 entries
 const REMOVE_BATCH = 100;
 
 function parseFlags(argv) {
-  const flags = { apply: false, shrink: false, maxBytes: 1024 * 1024 };
+  const flags = { apply: false, shrink: false, force: false, maxBytes: 1024 * 1024 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--apply") flags.apply = true;
     else if (a === "--shrink") flags.shrink = true;
+    else if (a === "--force") flags.force = true;
     else if (a === "--max-bytes") flags.maxBytes = Number(argv[++i]);
   }
   return flags;
@@ -213,6 +218,25 @@ async function main() {
     `oversized: ${oversized.length} objects, ${fmt(sum(oversized, (x) => x.object.size))}` +
       (flags.shrink ? "" : "  (skipped — pass --shrink)"),
   );
+
+  // Last check before an irreversible delete: orphans should be a handful of
+  // skipped uploads, never a meaningful slice of the library.
+  const guard = checkOrphanShare({
+    orphanCount: orphans.length,
+    totalObjects: objects.length,
+    force: flags.force,
+  });
+  if (!guard.ok) {
+    const label = flags.apply ? "ABORTED" : "WARNING";
+    console.error(`\n${label}: ${guard.reason}`);
+    for (const o of orphans.slice(0, 10)) console.error(`  suspect: ${o.name}`);
+    if (orphans.length > 10) console.error(`  ...and ${orphans.length - 10} more`);
+    // A dry run is how you diagnose this, so let it finish and print its report.
+    if (flags.apply) process.exit(1);
+  }
+  if (guard.forced) {
+    console.log(`\n! orphan share ${(guard.share * 100).toFixed(1)}% exceeds the ceiling — proceeding on --force`);
+  }
 
   await removeObjects(supabase, orphans.map((o) => o.name), flags.apply);
   await removeObjects(supabase, rejected.map((o) => o.name), flags.apply);
