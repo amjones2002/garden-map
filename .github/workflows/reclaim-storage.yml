@@ -41,7 +41,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 22, not 20: supabase-js constructs a RealtimeClient on createClient()
+          # and Node <22 has no global WebSocket, so it throws before the script
+          # runs a single line. 22 also matches local dev.
+          node-version: "22"
           cache: npm
 
       - run: npm ci
